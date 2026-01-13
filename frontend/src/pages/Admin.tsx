@@ -21,7 +21,8 @@ interface Stats {
   net_revenue: number;
 }
 
-const API_URL = 'http://localhost:8001';
+// Backend FastAPI roda na porta 8000 (vide uvicorn main:app --reload --port 8000)
+const API_URL = 'http://localhost:8000';
 
 const makeId = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(16).slice(2));
 
