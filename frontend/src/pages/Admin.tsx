@@ -746,6 +746,37 @@ function BrandingTab() {
     setMessage('Campo limpo.');
   };
 
+  const handleMultipleBanners = (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    const readers = Array.from(fileList).map(
+      (file) =>
+        new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        })
+    );
+    Promise.all(readers).then((imgs) => {
+      const updated = {
+        ...assets,
+        banner: imgs[0] || assets.banner,
+        banners: [...(assets.banners || []), ...imgs]
+      };
+      setAssets(updated);
+      saveBrandAssets(updated);
+      applyBrandAssets(updated);
+      setMessage('Banners adicionados e aplicados.');
+    });
+  };
+
+  const removeBannerAt = (idx: number) => {
+    const next = (assets.banners || []).filter((_, i) => i !== idx);
+    const updated = { ...assets, banners: next, banner: next[0] };
+    setAssets(updated);
+    saveBrandAssets(updated);
+    applyBrandAssets(updated);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -779,12 +810,22 @@ function BrandingTab() {
             <button onClick={() => clearField('banner')} className="text-sm text-gray-300 hover:text-white">Limpar</button>
           </div>
           <label className="block">
-            <span className="text-sm text-gray-300">Upload (PNG/JPG)</span>
-            <input type="file" accept="image/*" onChange={(e) => handleFile('banner', e.target.files?.[0])} className="mt-2 w-full text-sm" />
+            <span className="text-sm text-gray-300">Upload (PNG/JPG) - múltiplos para carrossel</span>
+            <input type="file" accept="image/*" multiple onChange={(e) => handleMultipleBanners(e.target.files)} className="mt-2 w-full text-sm" />
           </label>
-          {assets.banner && (
-            <div className="p-2 bg-gray-900 rounded border border-gray-700">
-              <img src={assets.banner} alt="Banner atual" className="max-h-28 object-contain mx-auto" />
+          {(assets.banners || assets.banner) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {(assets.banners || (assets.banner ? [assets.banner] : [])).map((b, idx) => (
+                <div key={idx} className="relative p-2 bg-gray-900 rounded border border-gray-700">
+                  <img src={b} alt={`Banner ${idx + 1}`} className="max-h-28 w-full object-cover rounded" />
+                  <button
+                    onClick={() => removeBannerAt(idx)}
+                    className="absolute top-2 right-2 text-xs bg-black/60 px-2 py-1 rounded hover:bg-black/80"
+                  >
+                    Remover
+                  </button>
+                </div>
+              ))}
             </div>
           )}
         </div>

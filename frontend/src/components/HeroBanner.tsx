@@ -1,55 +1,63 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import './HeroBanner.css';
 import { getBrandAssets } from '../utils/themeManager';
 
 export default function HeroBanner() {
-  const [currentSlide] = useState(0);
+  const [currentSlide, setCurrentSlide] = useState(0);
   const brand = getBrandAssets();
 
-  const banners = [
-    {
-      title: 'SAQUES ILIMITADOS',
-      subtitle: 'QUANTAS VEZES QUISER NO DIA!',
-      cta: 'CADASTRE-SE',
-      bgGradient: 'from-[#0a0e0f] via-[#0a1a1a] to-[#0a0e0f]',
-      banner: brand.banner
-    }
-  ];
+  const slides = useMemo(() => {
+    const list = brand.banners?.length ? brand.banners : brand.banner ? [brand.banner] : [];
+    return list;
+  }, [brand.banners, brand.banner]);
 
   const heroStyle = brand.banner
     ? {
-        backgroundImage: `url(${brand.banner})`,
+        backgroundImage: `url(${slides[currentSlide]})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat'
       }
     : undefined;
 
+  if (!slides.length) {
+    return <div className="relative w-full h-[300px] sm:h-[360px] md:h-[420px] bg-gradient-to-br from-[#0a0e0f] via-[#0d1a1a] to-[#0a0e0f]" />;
+  }
+
   return (
     <div
-      className={`relative w-full h-[400px] sm:h-[450px] md:h-[500px] lg:h-[550px] overflow-hidden bg-gradient-to-br from-[#0a0e0f] via-[#0d1a1a] to-[#0a0e0f] ${brand.banner ? 'fv-hero-banner' : ''}`}
+      className={`relative w-full h-[400px] sm:h-[450px] md:h-[500px] lg:h-[550px] overflow-hidden`}
       style={heroStyle}
     >
-      {/* Overlay gradiente para profundidade */}
-      <div className="absolute inset-0 bg-gradient-to-t from-[#0a0e0f]/80 via-transparent to-[#0a0e0f]/40 z-0"></div>
-
-      <div className="relative container mx-auto px-4 h-full flex items-center z-10">
-        <div className="grid grid-cols-1 items-center w-full">
-          <div className="text-center md:text-left z-10 max-w-3xl">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#d4af37] via-[#ffd700] to-[#d4af37] mb-3 md:mb-4 drop-shadow-2xl animate-gradient">
-              {banners[currentSlide].title}
-            </h1>
-            <p className="text-base sm:text-lg md:text-xl lg:text-2xl text-white/90 mb-6 md:mb-8 font-medium leading-relaxed">
-              {banners[currentSlide].subtitle}
-            </p>
-            <button className="group relative bg-gradient-to-r from-[#d4af37] to-[#ffd700] text-black px-6 md:px-8 py-3 md:py-4 rounded-xl text-sm md:text-base font-black hover:from-[#ffd700] hover:to-[#d4af37] transition-all duration-300 shadow-2xl shadow-[#d4af37]/30 hover:shadow-[#d4af37]/50 hover:scale-105 transform">
-              <span className="relative z-10">{banners[currentSlide].cta}</span>
-              <div className="absolute inset-0 bg-gradient-to-r from-[#ffd700] to-[#d4af37] rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-            </button>
+      <div className="absolute inset-0 bg-black/20"></div>
+      {slides.length > 1 && (
+        <>
+          <button
+            onClick={() => setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length)}
+            className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-3 rounded-full transition-all z-20"
+            aria-label="Anterior"
+          >
+            ‹
+          </button>
+          <button
+            onClick={() => setCurrentSlide((prev) => (prev + 1) % slides.length)}
+            className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-3 rounded-full transition-all z-20"
+            aria-label="Próximo"
+          >
+            ›
+          </button>
+          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+            {slides.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => setCurrentSlide(idx)}
+                className={`w-3 h-3 rounded-full ${idx === currentSlide ? 'bg-white' : 'bg-white/50'}`}
+                aria-label={`Banner ${idx + 1}`}
+              />
+            ))}
           </div>
-        </div>
-      </div>
-
+        </>
+      )}
     </div>
   );
 }

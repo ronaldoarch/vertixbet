@@ -13,6 +13,7 @@ export type ThemePalette = {
 export type BrandAssets = {
   logo?: string;
   banner?: string;
+  banners?: string[];
 };
 
 const THEME_LIST_KEY = 'fv_theme_list';
@@ -130,7 +131,11 @@ export function getBrandAssets(): BrandAssets {
   if (typeof localStorage === 'undefined') return {};
   try {
     const raw = localStorage.getItem(BRAND_KEY);
-    return raw ? JSON.parse(raw) : {};
+    const parsed = raw ? JSON.parse(raw) : {};
+    if (parsed.banner && !parsed.banners) {
+      parsed.banners = [parsed.banner];
+    }
+    return parsed;
   } catch {
     return {};
   }
