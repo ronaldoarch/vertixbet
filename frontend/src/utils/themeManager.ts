@@ -144,9 +144,15 @@ export function getBrandAssets(): BrandAssets {
   }
 }
 
-export function saveBrandAssets(assets: BrandAssets) {
-  if (typeof localStorage === 'undefined') return;
-  localStorage.setItem(BRAND_KEY, JSON.stringify(assets));
+export function saveBrandAssets(assets: BrandAssets): boolean {
+  if (typeof localStorage === 'undefined') return false;
+  try {
+    localStorage.setItem(BRAND_KEY, JSON.stringify(assets));
+    return true;
+  } catch (err) {
+    console.warn('Falha ao salvar brand assets', err);
+    return false;
+  }
 }
 
 export function applyBrandAssets(assets?: BrandAssets) {

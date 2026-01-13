@@ -729,11 +729,18 @@ function BrandingTab() {
     const reader = new FileReader();
     reader.onload = () => {
       const base64 = reader.result as string;
-      const updated = { ...assets, [field]: base64 };
-      setAssets(updated);
-      saveBrandAssets(updated);
-      applyBrandAssets(updated);
-      setMessage('Alterações aplicadas em tempo real.');
+      setAssets((prev) => {
+        const updated = { ...prev, [field]: base64 };
+        const ok = saveBrandAssets(updated);
+        if (ok) {
+          applyBrandAssets(updated);
+          setMessage('Alterações aplicadas em tempo real.');
+          return updated;
+        } else {
+          setMessage('Não foi possível salvar: limite de armazenamento atingido. Use arquivos menores ou remova alguns banners.');
+          return prev;
+        }
+      });
     };
     reader.readAsDataURL(file);
   };
@@ -763,11 +770,16 @@ function BrandingTab() {
           banners: [...(prev.banners || []), ...imgs],
         };
         updated.banner = updated.banners?.[0] || prev.banner;
-        saveBrandAssets(updated);
-        applyBrandAssets(updated);
-        return updated;
+        const ok = saveBrandAssets(updated);
+        if (ok) {
+          applyBrandAssets(updated);
+          setMessage('Banners adicionados e aplicados.');
+          return updated;
+        } else {
+          setMessage('Não foi possível salvar: limite de armazenamento atingido. Use arquivos menores ou remova alguns banners.');
+          return prev;
+        }
       });
-      setMessage('Banners adicionados e aplicados.');
     });
   };
 
@@ -775,9 +787,15 @@ function BrandingTab() {
     setAssets((prev) => {
       const next = (prev.banners || []).filter((_, i) => i !== idx);
       const updated = { ...prev, banners: next, banner: next[0] };
-      saveBrandAssets(updated);
-      applyBrandAssets(updated);
-      return updated;
+      const ok = saveBrandAssets(updated);
+      if (ok) {
+        applyBrandAssets(updated);
+        setMessage('Banner removido.');
+        return updated;
+      } else {
+        setMessage('Não foi possível salvar alteração nos banners.');
+        return prev;
+      }
     });
   };
 
