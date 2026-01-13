@@ -4,12 +4,22 @@ import { getBrandAssets } from '../utils/themeManager';
 
 export default function HeroBanner() {
   const [currentSlide, setCurrentSlide] = useState(0);
-  const brand = getBrandAssets();
+  const [assets, setAssets] = useState(getBrandAssets());
+
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'fv_brand_assets') {
+        setAssets(getBrandAssets());
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   const slides = useMemo(() => {
-    const list = brand.banners?.length ? brand.banners : brand.banner ? [brand.banner] : [];
+    const list = assets.banners?.length ? assets.banners : assets.banner ? [assets.banner] : [];
     return list;
-  }, [brand.banners, brand.banner]);
+  }, [assets.banners, assets.banner]);
 
   useEffect(() => {
     if (slides.length > 1) {
