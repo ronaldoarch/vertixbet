@@ -23,9 +23,7 @@ export default function Header({ onMenuClick, onLoginClick, onRegisterClick }: H
               </button>
             )}
             <a href="/" className="flex items-center gap-1 md:gap-2 hover:opacity-80 transition-opacity">
-              <div className="fv-logo-img w-9 h-9 md:w-11 md:h-11 rounded bg-center bg-contain bg-no-repeat" />
-              <div className="text-lg md:text-2xl font-bold tracking-tight">FORTUNE</div>
-              <div className="text-base md:text-xl font-semibold hidden sm:block">VEGAS</div>
+              <div className="fv-logo-img w-10 h-10 md:w-12 md:h-12 rounded bg-center bg-contain bg-no-repeat border border-white/10" />
               <Gift className="text-[#d4af37] w-4 h-4 md:w-5 md:h-5" />
             </a>
           </div>

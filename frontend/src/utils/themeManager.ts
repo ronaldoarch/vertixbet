@@ -160,6 +160,12 @@ export function applyBrandAssets(assets?: BrandAssets) {
   background-repeat: no-repeat;
   background-position: center;
 }
+
+.fv-hero-banner {
+  background-image: var(--fv-banner-url);
+  background-size: cover;
+  background-position: center;
+}
 `;
 }
 
