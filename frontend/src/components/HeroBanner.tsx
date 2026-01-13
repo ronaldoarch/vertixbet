@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import './HeroBanner.css';
 import { getBrandAssets } from '../utils/themeManager';
 
@@ -11,14 +11,25 @@ export default function HeroBanner() {
     return list;
   }, [brand.banners, brand.banner]);
 
-  const heroStyle = brand.banner
-    ? {
-        backgroundImage: `url(${slides[currentSlide]})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat'
-      }
-    : undefined;
+  useEffect(() => {
+    if (slides.length > 1) {
+      const id = setInterval(() => {
+        setCurrentSlide((prev) => (prev + 1) % slides.length);
+      }, 5000);
+      return () => clearInterval(id);
+    }
+    setCurrentSlide(0);
+  }, [slides.length]);
+
+  const heroStyle =
+    slides.length > 0
+      ? {
+          backgroundImage: `url(${slides[currentSlide]})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat'
+        }
+      : undefined;
 
   if (!slides.length) {
     return <div className="relative w-full h-[300px] sm:h-[360px] md:h-[420px] bg-gradient-to-br from-[#0a0e0f] via-[#0d1a1a] to-[#0a0e0f]" />;
