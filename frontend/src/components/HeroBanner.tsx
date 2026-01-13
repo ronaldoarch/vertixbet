@@ -1,11 +1,9 @@
-import { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
 import './HeroBanner.css';
 import { getBrandAssets } from '../utils/themeManager';
 
 export default function HeroBanner() {
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const [mounted, setMounted] = useState(false);
+  const [currentSlide] = useState(0);
   const brand = getBrandAssets();
 
   const banners = [
@@ -18,22 +16,19 @@ export default function HeroBanner() {
     }
   ];
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  const nextSlide = () => {
-    setCurrentSlide((prev) => (prev + 1) % banners.length);
-  };
-
-  const prevSlide = () => {
-    setCurrentSlide((prev) => (prev - 1 + banners.length) % banners.length);
-  };
+  const heroStyle = brand.banner
+    ? {
+        backgroundImage: `url(${brand.banner})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat'
+      }
+    : undefined;
 
   return (
     <div
       className={`relative w-full h-[400px] sm:h-[450px] md:h-[500px] lg:h-[550px] overflow-hidden bg-gradient-to-br from-[#0a0e0f] via-[#0d1a1a] to-[#0a0e0f] ${brand.banner ? 'fv-hero-banner' : ''}`}
-      style={brand.banner ? { backgroundImage: `url(${brand.banner})` } : undefined}
+      style={heroStyle}
     >
       {/* Overlay gradiente para profundidade */}
       <div className="absolute inset-0 bg-gradient-to-t from-[#0a0e0f]/80 via-transparent to-[#0a0e0f]/40 z-0"></div>
