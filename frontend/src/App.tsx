@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import PromoBanner from './components/PromoBanner';
 import Header from './components/Header';
 import HeroBanner from './components/HeroBanner';
@@ -11,6 +11,7 @@ import BottomNav from './components/BottomNav';
 import ChatWidget from './components/ChatWidget';
 import LoginModal from './components/LoginModal';
 import RegisterModal from './components/RegisterModal';
+import { applyBrandAssets, applyThemeToDocument, initThemeAndBrandFromStorage } from './utils/themeManager';
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -25,6 +26,21 @@ function App() {
 
   const handleProvidersLoaded = useCallback((items: string[]) => {
     setProviders(items);
+  }, []);
+
+  useEffect(() => {
+    initThemeAndBrandFromStorage();
+    const onStorage = (e: StorageEvent) => {
+      if (!e.key) return;
+      if (['fv_theme_list', 'fv_theme_active'].includes(e.key)) {
+        applyThemeToDocument();
+      }
+      if (e.key === 'fv_brand_assets') {
+        applyBrandAssets();
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, []);
 
   return (
