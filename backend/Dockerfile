@@ -8,9 +8,15 @@ RUN apt-get update && apt-get install -y \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar requirements e instalar dependências Python
+# Copiar requirements primeiro (cache layer)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+
+# Instalar dependências Python
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Verificar se FastAPI foi instalado (debug)
+RUN python -c "import fastapi; print(f'FastAPI version: {fastapi.__version__}')" || echo "ERROR: FastAPI not installed"
 
 # Copiar código da aplicação
 COPY . .
@@ -22,9 +28,13 @@ RUN mkdir -p uploads/logos uploads/banners && \
 # Variáveis de ambiente padrão (podem ser sobrescritas no Coolify)
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8000
+ENV PYTHONPATH=/app
 
 # Expor porta
 EXPOSE 8000
 
+# Verificar instalação antes de iniciar
+RUN python -c "import fastapi, uvicorn; print('Dependencies OK')" || (echo "ERROR: Dependencies missing" && exit 1)
+
 # Comando para iniciar a aplicação
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
+CMD ["sh", "-c", "python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
