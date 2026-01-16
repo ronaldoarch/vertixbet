@@ -211,9 +211,9 @@ export default function NovidadesSection({ filters, onProvidersLoaded }: Novidad
           {!loading && filteredGames.length === 0 && (
             <div className="col-span-2 sm:col-span-3 lg:col-span-4 text-gray-400 text-sm">
               Nenhum jogo encontrado para os filtros selecionados.
-            </div>
-          )}
-        </div>
+              </div>
+                )}
+              </div>
 
         {!loading && providerEntries.length > 0 && (
           <div className="mt-10 md:mt-12 space-y-8">
@@ -241,8 +241,8 @@ export default function NovidadesSection({ filters, onProvidersLoaded }: Novidad
                     {providerGames.map(renderGameCard)}
                   </div>
                 </div>
-              ))}
-            </div>
+          ))}
+        </div>
           </div>
         )}
       </div>
