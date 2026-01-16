@@ -1,4 +1,7 @@
+import { useEffect, useState } from 'react';
 import { Gift, Menu as MenuIcon } from 'lucide-react';
+
+const API_URL = 'http://localhost:8000';
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -7,6 +10,29 @@ interface HeaderProps {
 }
 
 export default function Header({ onMenuClick, onLoginClick, onRegisterClick }: HeaderProps) {
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchLogo = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/public/media/logo`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.url) {
+            setLogoUrl(`${API_URL}${data.url}`);
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao buscar logo:', err);
+      }
+    };
+    fetchLogo();
+    
+    // Polling para atualizar logo (a cada 5 segundos)
+    const interval = setInterval(fetchLogo, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <header className="w-full bg-[#0a4d3e] text-white sticky top-0 z-40 shadow-md">
       <div className="container mx-auto px-3 md:px-4 py-2 md:py-3">
@@ -23,7 +49,14 @@ export default function Header({ onMenuClick, onLoginClick, onRegisterClick }: H
               </button>
             )}
             <a href="/" className="flex items-center gap-1 md:gap-2 hover:opacity-80 transition-opacity">
-              <div className="fv-logo-img w-10 h-10 md:w-12 md:h-12 rounded bg-center bg-contain bg-no-repeat border border-white/10" />
+              {logoUrl ? (
+                <img src={logoUrl} alt="Fortune Vegas" className="w-10 h-10 md:w-12 md:h-12 object-contain" />
+              ) : (
+                <>
+                  <div className="text-lg md:text-2xl font-bold tracking-tight">FORTUNE</div>
+                  <div className="text-base md:text-xl font-semibold hidden sm:block">VEGAS</div>
+                </>
+              )}
               <Gift className="text-[#d4af37] w-4 h-4 md:w-5 md:h-5" />
             </a>
           </div>

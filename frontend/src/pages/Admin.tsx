@@ -175,7 +175,7 @@ export default function Admin() {
           {activeTab === 'gateways' && <GatewaysTab token={token || ''} />}
           {activeTab === 'igamewin' && <IGameWinTab token={token || ''} />}
           {activeTab === 'settings' && <SettingsTab token={token || ''} />}
-          {activeTab === 'branding' && <BrandingTab />}
+          {activeTab === 'branding' && <BrandingTab token={token || ''} />}
           {activeTab === 'themes' && <ThemesTab />}
         </main>
       </div>
@@ -720,83 +720,146 @@ function SettingsTab({ token }: { token: string }) {
   );
 }
 
-function BrandingTab() {
-  const [assets, setAssets] = useState<BrandAssets>(() => getBrandAssets());
+function BrandingTab({ token }: { token: string }) {
+  const [logo, setLogo] = useState<{ id: number; url: string } | null>(null);
+  const [banners, setBanners] = useState<Array<{ id: number; url: string }>>([]);
+  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  const handleFile = (field: 'logo' | 'banner', file?: File | null) => {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = reader.result as string;
-      setAssets((prev) => {
-        const updated = { ...prev, [field]: base64 };
-        const ok = saveBrandAssets(updated);
-        if (ok) {
-          applyBrandAssets(updated);
-          setMessage('Alterações aplicadas em tempo real.');
-          return updated;
-        } else {
-          setMessage('Não foi possível salvar: limite de armazenamento atingido. Use arquivos menores ou remova alguns banners.');
-          return prev;
-        }
-      });
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const clearField = (field: 'logo' | 'banner') => {
-    const updated = { ...assets, [field]: undefined };
-    setAssets(updated);
-    saveBrandAssets(updated);
-    applyBrandAssets(updated);
-    setMessage('Campo limpo.');
-  };
-
-  const handleMultipleBanners = (fileList: FileList | null) => {
-    if (!fileList || fileList.length === 0) return;
-    const readers = Array.from(fileList).map(
-      (file) =>
-        new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
+  const fetchAssets = async () => {
+    setLoading(true);
+    try {
+      const [logoRes, bannersRes] = await Promise.all([
+        fetch(`${API_URL}/api/admin/media/list?media_type=logo`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch(`${API_URL}/api/admin/media/list?media_type=banner`, {
+          headers: { Authorization: `Bearer ${token}` }
         })
-    );
-    Promise.all(readers).then((imgs) => {
-      setAssets((prev) => {
-        const updated = {
-          ...prev,
-          banners: [...(prev.banners || []), ...imgs],
-        };
-        updated.banner = updated.banners?.[0] || prev.banner;
-        const ok = saveBrandAssets(updated);
-        if (ok) {
-          applyBrandAssets(updated);
-          setMessage('Banners adicionados e aplicados.');
-          return updated;
-        } else {
-          setMessage('Não foi possível salvar: limite de armazenamento atingido. Use arquivos menores ou remova alguns banners.');
-          return prev;
-        }
-      });
-    });
+      ]);
+      
+      if (logoRes.ok) {
+        const logos = await logoRes.json();
+        setLogo(logos.length > 0 ? { id: logos[0].id, url: logos[0].url } : null);
+      }
+      
+      if (bannersRes.ok) {
+        const bannersData = await bannersRes.json();
+        setBanners(bannersData.map((b: any) => ({ id: b.id, url: b.url })));
+      }
+    } catch (err) {
+      console.error('Erro ao buscar assets:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const removeBannerAt = (idx: number) => {
-    setAssets((prev) => {
-      const next = (prev.banners || []).filter((_, i) => i !== idx);
-      const updated = { ...prev, banners: next, banner: next[0] };
-      const ok = saveBrandAssets(updated);
-      if (ok) {
-        applyBrandAssets(updated);
-        setMessage('Banner removido.');
-        return updated;
-      } else {
-        setMessage('Não foi possível salvar alteração nos banners.');
-        return prev;
+  useEffect(() => {
+    fetchAssets();
+  }, []);
+
+  const handleLogoUpload = async (file?: File | null) => {
+    if (!file) return;
+    setLoading(true);
+    setMessage('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('media_type', 'logo');
+      
+      const res = await fetch(`${API_URL}/api/admin/media/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+      
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Erro ao fazer upload');
       }
-    });
+      
+      await fetchAssets();
+      setMessage('Logo enviado e aplicado em tempo real.');
+    } catch (err: any) {
+      setMessage(err.message || 'Erro ao fazer upload do logo.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBannerUpload = async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    setLoading(true);
+    setMessage('');
+    try {
+      const uploads = Array.from(fileList).map(async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('media_type', 'banner');
+        
+        const res = await fetch(`${API_URL}/api/admin/media/upload`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData
+        });
+        
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Erro ao fazer upload');
+        }
+        
+        return await res.json();
+      });
+      
+      await Promise.all(uploads);
+      await fetchAssets();
+      setMessage('Banners adicionados e aplicados em tempo real.');
+    } catch (err: any) {
+      setMessage(err.message || 'Erro ao fazer upload dos banners.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const removeLogo = async () => {
+    if (!logo) return;
+    setLoading(true);
+    setMessage('');
+    try {
+      const res = await fetch(`${API_URL}/api/admin/media/${logo.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!res.ok) throw new Error('Erro ao remover logo');
+      
+      await fetchAssets();
+      setMessage('Logo removido.');
+    } catch (err: any) {
+      setMessage(err.message || 'Erro ao remover logo.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const removeBanner = async (id: number) => {
+    setLoading(true);
+    setMessage('');
+    try {
+      const res = await fetch(`${API_URL}/api/admin/media/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!res.ok) throw new Error('Erro ao remover banner');
+      
+      await fetchAssets();
+      setMessage('Banner removido.');
+    } catch (err: any) {
+      setMessage(err.message || 'Erro ao remover banner.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -807,21 +870,30 @@ function BrandingTab() {
           <p className="text-sm text-gray-400">Envie logo e banner para aplicar na plataforma em tempo real.</p>
         </div>
       </div>
-      {message && <div className="text-sm text-emerald-400">{message}</div>}
+      {message && <div className={`text-sm ${message.includes('Erro') ? 'text-red-400' : 'text-emerald-400'}`}>{message}</div>}
+      {loading && <div className="text-sm text-gray-400">Carregando...</div>}
 
       <div className="grid md:grid-cols-2 gap-4">
         <div className="bg-gray-800/60 p-4 rounded border border-gray-700 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold">Logo</h3>
-            <button onClick={() => clearField('logo')} className="text-sm text-gray-300 hover:text-white">Limpar</button>
+            {logo && (
+              <button onClick={removeLogo} className="text-sm text-gray-300 hover:text-white">Limpar</button>
+            )}
           </div>
           <label className="block">
             <span className="text-sm text-gray-300">Upload (PNG/JPG/SVG)</span>
-            <input type="file" accept="image/*" onChange={(e) => handleFile('logo', e.target.files?.[0])} className="mt-2 w-full text-sm" />
+            <input 
+              type="file" 
+              accept="image/*" 
+              onChange={(e) => handleLogoUpload(e.target.files?.[0])} 
+              className="mt-2 w-full text-sm" 
+              disabled={loading}
+            />
           </label>
-          {assets.logo && (
+          {logo && (
             <div className="p-2 bg-gray-900 rounded border border-gray-700">
-              <img src={assets.logo} alt="Logo atual" className="max-h-20 object-contain mx-auto" />
+              <img src={`${API_URL}${logo.url}`} alt="Logo atual" className="max-h-20 object-contain mx-auto" />
             </div>
           )}
         </div>
@@ -829,20 +901,27 @@ function BrandingTab() {
         <div className="bg-gray-800/60 p-4 rounded border border-gray-700 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold">Banner</h3>
-            <button onClick={() => clearField('banner')} className="text-sm text-gray-300 hover:text-white">Limpar</button>
           </div>
           <label className="block">
             <span className="text-sm text-gray-300">Upload (PNG/JPG) - múltiplos para carrossel</span>
-            <input type="file" accept="image/*" multiple onChange={(e) => handleMultipleBanners(e.target.files)} className="mt-2 w-full text-sm" />
+            <input 
+              type="file" 
+              accept="image/*" 
+              multiple 
+              onChange={(e) => handleBannerUpload(e.target.files)} 
+              className="mt-2 w-full text-sm" 
+              disabled={loading}
+            />
           </label>
-          {(assets.banners || assets.banner) && (
+          {banners.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {(assets.banners || (assets.banner ? [assets.banner] : [])).map((b, idx) => (
-                <div key={idx} className="relative p-2 bg-gray-900 rounded border border-gray-700">
-                  <img src={b} alt={`Banner ${idx + 1}`} className="max-h-28 w-full object-cover rounded" />
+              {banners.map((b) => (
+                <div key={b.id} className="relative p-2 bg-gray-900 rounded border border-gray-700">
+                  <img src={`${API_URL}${b.url}`} alt={`Banner ${b.id}`} className="max-h-28 w-full object-cover rounded" />
                   <button
-                    onClick={() => removeBannerAt(idx)}
+                    onClick={() => removeBanner(b.id)}
                     className="absolute top-2 right-2 text-xs bg-black/60 px-2 py-1 rounded hover:bg-black/80"
+                    disabled={loading}
                   >
                     Remover
                   </button>

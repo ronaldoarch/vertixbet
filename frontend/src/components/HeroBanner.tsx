@@ -1,25 +1,33 @@
 import { useEffect, useMemo, useState } from 'react';
 import './HeroBanner.css';
-import { getBrandAssets } from '../utils/themeManager';
+
+const API_URL = 'http://localhost:8000';
 
 export default function HeroBanner() {
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [assets, setAssets] = useState(getBrandAssets());
+  const [banners, setBanners] = useState<string[]>([]);
 
   useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === 'fv_brand_assets') {
-        setAssets(getBrandAssets());
+    const fetchBanners = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/public/media/banners`);
+        if (res.ok) {
+          const data = await res.json();
+          const urls = data.map((b: any) => `${API_URL}${b.url}`);
+          setBanners(urls);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar banners:', err);
       }
     };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    fetchBanners();
+    
+    // Polling para atualizar banners (a cada 5 segundos)
+    const interval = setInterval(fetchBanners, 5000);
+    return () => clearInterval(interval);
   }, []);
 
-  const slides = useMemo(() => {
-    const list = assets.banners?.length ? assets.banners : assets.banner ? [assets.banner] : [];
-    return list;
-  }, [assets.banners, assets.banner]);
+  const slides = useMemo(() => banners, [banners]);
 
   useEffect(() => {
     if (slides.length > 1) {
