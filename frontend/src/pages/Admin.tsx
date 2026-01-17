@@ -4,7 +4,9 @@ import {
   Users, DollarSign, TrendingUp, Settings, 
   LogOut, Menu, X, CreditCard, ArrowUpCircle, 
   ArrowDownCircle, Key, Activity, RefreshCw,
-  Image as ImageIcon, Palette
+  Image as ImageIcon, Palette, Home, BarChart3,
+  ChevronUp, ChevronDown, Percent, FileText, 
+  Gift, ShoppingBag, Tag
 } from 'lucide-react';
 import type { ThemePalette } from '../utils/themeManager';
 import { applyThemeToDocument, getThemeList, saveThemeList, setActiveTheme } from '../utils/themeManager';
@@ -55,6 +57,14 @@ export default function Admin() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('admin_token'));
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Estado para controlar seções expansíveis
+  const [expandedSections, setExpandedSections] = useState({
+    financeiro: true,
+    notificacoes: true,
+    marketing: true,
+    geral: true,
+  });
 
   useEffect(() => {
     if (!token) {
@@ -123,67 +133,119 @@ export default function Admin() {
             sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
           }`}
         >
-          <nav className="p-4 space-y-2">
+          <nav className="p-4 space-y-1">
             <NavItem
-              icon={<Activity />}
-              label="Dashboard"
+              icon={<Home />}
+              label="Painel de Controle"
               active={activeTab === 'dashboard'}
               onClick={() => setActiveTab('dashboard')}
             />
             <NavItem
-              icon={<Users />}
-              label="Usuários"
-              active={activeTab === 'users'}
-              onClick={() => setActiveTab('users')}
-            />
-            <NavItem
-              icon={<ArrowDownCircle />}
-              label="Depósitos"
-              active={activeTab === 'deposits'}
-              onClick={() => setActiveTab('deposits')}
-            />
-            <NavItem
-              icon={<ArrowUpCircle />}
-              label="Saques"
-              active={activeTab === 'withdrawals'}
-              onClick={() => setActiveTab('withdrawals')}
-            />
-            <NavItem
-              icon={<TrendingUp />}
-              label="FTDs"
-              active={activeTab === 'ftds'}
-              onClick={() => setActiveTab('ftds')}
-            />
-            <NavItem
-              icon={<CreditCard />}
-              label="Gateways"
-              active={activeTab === 'gateways'}
-              onClick={() => setActiveTab('gateways')}
-            />
-            <NavItem
-              icon={<Key />}
-              label="IGameWin"
-              active={activeTab === 'igamewin'}
-              onClick={() => setActiveTab('igamewin')}
+              icon={<BarChart3 />}
+              label="Métricas"
+              active={activeTab === 'metrics'}
+              onClick={() => setActiveTab('metrics')}
             />
             <NavItem
               icon={<Settings />}
-              label="Configurações"
+              label="Configuração"
               active={activeTab === 'settings'}
               onClick={() => setActiveTab('settings')}
             />
-            <NavItem
-              icon={<ImageIcon />}
-              label="Branding"
-              active={activeTab === 'branding'}
-              onClick={() => setActiveTab('branding')}
-            />
-            <NavItem
-              icon={<Palette />}
-              label="Temas"
-              active={activeTab === 'themes'}
-              onClick={() => setActiveTab('themes')}
-            />
+            
+            <NavSection
+              title="Gestão Financeira"
+              expanded={expandedSections.financeiro}
+              onToggle={() => setExpandedSections({...expandedSections, financeiro: !expandedSections.financeiro})}
+            >
+              <NavSubItem
+                icon={<Percent />}
+                label="GGR / Relatorio"
+                active={activeTab === 'ggr'}
+                onClick={() => setActiveTab('ggr')}
+              />
+              <NavSubItem
+                icon={<ArrowUpCircle />}
+                label="Saques"
+                active={activeTab === 'withdrawals'}
+                onClick={() => setActiveTab('withdrawals')}
+              />
+              <NavSubItem
+                icon={<ArrowDownCircle />}
+                label="Depositos"
+                active={activeTab === 'deposits'}
+                onClick={() => setActiveTab('deposits')}
+              />
+              <NavSubItem
+                icon={<FileText />}
+                label="Apostas"
+                active={activeTab === 'bets'}
+                onClick={() => setActiveTab('bets')}
+              />
+            </NavSection>
+            
+            <NavSection
+              title="Centro de Notificações"
+              expanded={expandedSections.notificacoes}
+              onToggle={() => setExpandedSections({...expandedSections, notificacoes: !expandedSections.notificacoes})}
+            >
+              <NavSubItem
+                icon={<Gift />}
+                label="Notificações"
+                active={activeTab === 'notifications'}
+                onClick={() => setActiveTab('notifications')}
+              />
+            </NavSection>
+            
+            <NavSection
+              title="Marketing"
+              expanded={expandedSections.marketing}
+              onToggle={() => setExpandedSections({...expandedSections, marketing: !expandedSections.marketing})}
+            >
+              <NavSubItem
+                icon={<ShoppingBag />}
+                label="Loja de Coins"
+                active={activeTab === 'coin-store'}
+                onClick={() => setActiveTab('coin-store')}
+              />
+            </NavSection>
+            
+            <NavSection
+              title="Geral"
+              expanded={expandedSections.geral}
+              onToggle={() => setExpandedSections({...expandedSections, geral: !expandedSections.geral})}
+            >
+              <NavSubItem
+                icon={<Users />}
+                label="Usuarios"
+                active={activeTab === 'users'}
+                onClick={() => setActiveTab('users')}
+              />
+              <NavSubItem
+                icon={<Tag />}
+                label="Cupom"
+                active={activeTab === 'coupons'}
+                onClick={() => setActiveTab('coupons')}
+              />
+              <NavSubItem
+                icon={<ImageIcon />}
+                label="Branding"
+                active={activeTab === 'branding'}
+                onClick={() => setActiveTab('branding')}
+              />
+              <NavSubItem
+                icon={<CreditCard />}
+                label="Gateways"
+                active={activeTab === 'gateways'}
+                onClick={() => setActiveTab('gateways')}
+              />
+              <NavSubItem
+                icon={<TrendingUp />}
+                label="FTDs"
+                active={activeTab === 'ftds'}
+                onClick={() => setActiveTab('ftds')}
+              />
+            </NavSection>
           </nav>
         </aside>
 
@@ -210,10 +272,48 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode; labe
     <button
       onClick={onClick}
       className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-        active ? 'bg-[#d4af37] text-black' : 'hover:bg-gray-700'
+        active ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700 hover:text-white'
       }`}
     >
-      {icon}
+      <div className={active ? 'text-blue-400' : 'text-gray-400'}>{icon}</div>
+      <span className="text-sm">{label}</span>
+    </button>
+  );
+}
+
+function NavSection({ title, expanded, onToggle, children }: { 
+  title: string; 
+  expanded: boolean; 
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-4 py-2 text-gray-400 hover:text-white transition-colors"
+      >
+        <span className="text-sm font-medium">{title}</span>
+        {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+      </button>
+      {expanded && (
+        <div className="ml-4 space-y-1">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NavSubItem({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors ${
+        active ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-700 hover:text-white'
+      }`}
+    >
+      <div className="text-gray-500" style={{ width: '16px', height: '16px' }}>{icon}</div>
       <span>{label}</span>
     </button>
   );
