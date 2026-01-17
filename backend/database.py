@@ -3,7 +3,11 @@ from sqlalchemy.orm import sessionmaker, Session
 from models import Base
 import os
 
+# Obter DATABASE_URL e normalizar postgres:// para postgresql://
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./fortunevegas.db")
+# SQLAlchemy 2.0 requer postgresql:// em vez de postgres://
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 engine = create_engine(
     DATABASE_URL,
