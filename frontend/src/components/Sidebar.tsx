@@ -83,7 +83,6 @@ export default function Sidebar({ isOpen, onClose, filters, onFiltersChange, pro
                     <div className="text-xs text-blue-100 font-semibold uppercase mb-1.5 leading-tight">Cashback 25%</div>
                     <div className="text-base font-bold text-white leading-tight">Depositar</div>
                   </div>
-                  <div className="text-3xl ml-2 flex-shrink-0">💰</div>
                 </div>
               </button>
 
