@@ -36,7 +36,7 @@ ENV PYTHONPATH=/app
 EXPOSE 8000
 
 # Verificar instalação antes de iniciar
-RUN python -c "import fastapi, uvicorn; print('Dependencies OK')" || (echo "ERROR: Dependencies missing" && exit 1)
+RUN python -c "import fastapi, uvicorn, psycopg2; print('Dependencies OK')" || (echo "ERROR: Dependencies missing" && exit 1)
 
 # Comando para iniciar a aplicação
 CMD ["sh", "-c", "python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
