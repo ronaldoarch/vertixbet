@@ -265,10 +265,18 @@ async def get_public_logo(db: Session = Depends(get_db)):
 @public_router.get("/uploads/{media_type}/{filename}")
 async def serve_uploaded_file(media_type: str, filename: str):
     """Servir arquivo de upload"""
-    file_path = UPLOAD_BASE_DIR / media_type / filename
+    # Mapear tipo da URL para diretório físico (plural)
+    dir_mapping = {
+        "logo": "logos",
+        "logos": "logos",
+        "banner": "banners",
+        "banners": "banners",
+    }
+    upload_dir = dir_mapping.get(media_type.lower(), media_type)
+    file_path = UPLOAD_BASE_DIR / upload_dir / filename
     
     if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
+        raise HTTPException(status_code=404, detail=f"Arquivo não encontrado: {file_path}")
 
     return FileResponse(
         file_path,
