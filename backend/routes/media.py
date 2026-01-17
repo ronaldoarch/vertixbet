@@ -110,10 +110,10 @@ async def upload_media(
         # Determinar nome do diretório na URL (plural para banners)
         url_dir = "banners" if media_type_enum == MediaType.BANNER else media_type_enum.value
         
-        # Salvar referência no banco
+        # Salvar referência no banco (URL relativa que será servida pela rota /api/public/media/uploads/...)
         media_asset = MediaAsset(
             type=media_type_enum,
-            url=f"/uploads/{url_dir}/{filename}",
+            url=f"/api/public/media/uploads/{url_dir}/{filename}",
             filename=filename,
             file_size=file_size,
             mime_type=file.content_type,
@@ -188,8 +188,9 @@ async def delete_media(
     if not asset:
         raise HTTPException(status_code=404, detail="Mídia não encontrada")
 
-    # Deletar arquivo físico
-    file_path = UPLOAD_BASE_DIR / asset.url.lstrip("/")
+    # Deletar arquivo físico (remove /api/public/media/uploads/ da URL se presente)
+    url_path = asset.url.replace("/api/public/media/uploads/", "").lstrip("/")
+    file_path = UPLOAD_BASE_DIR / url_path
     if file_path.exists():
         try:
             file_path.unlink()
