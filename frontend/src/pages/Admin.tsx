@@ -3,8 +3,8 @@ import { useNavigate, Navigate } from 'react-router-dom';
 import { 
   Users, DollarSign, TrendingUp, Settings, 
   LogOut, Menu, X, CreditCard, ArrowUpCircle, 
-  ArrowDownCircle, Key, Activity, RefreshCw,
-  Image as ImageIcon, Palette, Home, BarChart3,
+  ArrowDownCircle, Activity, RefreshCw,
+  Image as ImageIcon, Home, BarChart3,
   ChevronUp, ChevronDown, Percent, FileText, 
   Gift, ShoppingBag, Tag
 } from 'lucide-react';
