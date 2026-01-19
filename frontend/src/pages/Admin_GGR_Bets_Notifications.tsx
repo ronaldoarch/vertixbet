@@ -65,7 +65,7 @@ function TabTable({ title, loading, error, onRefresh, columns, rows }: {
 }
 
 // ========== GGR TAB ==========
-function GGRTab({ token }: { token: string }) {
+export function GGRTab({ token }: { token: string }) {
   const [report, setReport] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -148,7 +148,7 @@ function GGRTab({ token }: { token: string }) {
 }
 
 // ========== BETS TAB ==========
-function BetsTab({ token }: { token: string }) {
+export function BetsTab({ token }: { token: string }) {
   const [bets, setBets] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -195,7 +195,7 @@ function BetsTab({ token }: { token: string }) {
 }
 
 // ========== NOTIFICATIONS TAB ==========
-function NotificationsTab({ token }: { token: string }) {
+export function NotificationsTab({ token }: { token: string }) {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
