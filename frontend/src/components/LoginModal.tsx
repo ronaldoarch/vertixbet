@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X, Eye, EyeOff } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -8,9 +9,12 @@ interface LoginModalProps {
 }
 
 export default function LoginModal({ isOpen, onClose, onSwitchToRegister }: LoginModalProps) {
+  const { login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
 
@@ -95,15 +99,35 @@ export default function LoginModal({ isOpen, onClose, onSwitchToRegister }: Logi
             </a>
           </div>
 
+          {/* Error message */}
+          {error && (
+            <div className="bg-red-500/20 border border-red-500 text-red-200 px-4 py-3 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+
           {/* Login button */}
           <button
-            onClick={() => {
-              // Lógica de login aqui
-              console.log('Login:', { email, password });
+            onClick={async () => {
+              if (!email || !password) {
+                setError('Preencha todos os campos');
+                return;
+              }
+              setError('');
+              setLoading(true);
+              try {
+                await login(email, password);
+                onClose();
+              } catch (err: any) {
+                setError(err.message || 'Erro ao fazer login');
+              } finally {
+                setLoading(false);
+              }
             }}
-            className="w-full bg-[#ff6b35] hover:bg-[#ff7b35] text-white font-bold py-4 rounded-lg transition-colors text-lg"
+            disabled={loading}
+            className="w-full bg-[#ff6b35] hover:bg-[#ff7b35] disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-bold py-4 rounded-lg transition-colors text-lg"
           >
-            Entrar
+            {loading ? 'Entrando...' : 'Entrar'}
           </button>
 
           {/* Switch to register */}

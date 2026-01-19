@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X, Eye, EyeOff, Search } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface RegisterModalProps {
   isOpen: boolean;
@@ -8,7 +9,10 @@ interface RegisterModalProps {
 }
 
 export default function RegisterModal({ isOpen, onClose, onSwitchToLogin }: RegisterModalProps) {
+  const { register } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     cpf: '',
     nome: '',
@@ -175,19 +179,45 @@ export default function RegisterModal({ isOpen, onClose, onSwitchToLogin }: Regi
             </label>
           </div>
 
+          {/* Error message */}
+          {error && (
+            <div className="bg-red-500/20 border border-red-500 text-red-200 px-4 py-3 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+
           {/* Register button */}
           <button
-            onClick={() => {
+            onClick={async () => {
               if (!formData.termos) {
-                alert('Você precisa aceitar os Termos e Condições');
+                setError('Você precisa aceitar os Termos e Condições');
                 return;
               }
-              console.log('Register:', formData);
+              if (!formData.nome || !formData.email || !formData.senha) {
+                setError('Preencha todos os campos obrigatórios');
+                return;
+              }
+              setError('');
+              setLoading(true);
+              try {
+                await register({
+                  username: formData.nome.toLowerCase().replace(/\s+/g, '_'),
+                  email: formData.email,
+                  password: formData.senha,
+                  cpf: formData.cpf || undefined,
+                  phone: formData.telefone || undefined,
+                });
+                onClose();
+              } catch (err: any) {
+                setError(err.message || 'Erro ao criar conta');
+              } finally {
+                setLoading(false);
+              }
             }}
-            disabled={!formData.termos}
+            disabled={!formData.termos || loading}
             className="w-full bg-[#ff6b35] hover:bg-[#ff7b35] disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-bold py-4 rounded-lg transition-colors text-lg flex items-center justify-center gap-2"
           >
-            Criar conta <span>→</span>
+            {loading ? 'Criando conta...' : <>Criar conta <span>→</span></>}
           </button>
 
           {/* Switch to login */}

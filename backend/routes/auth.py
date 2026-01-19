@@ -2,17 +2,56 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import timedelta
 from database import get_db
-from schemas import LoginRequest, Token, UserResponse
-from auth import authenticate_user, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
+from schemas import LoginRequest, Token, UserResponse, UserCreate
+from auth import authenticate_user, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_password_hash, get_user_by_username
 from dependencies import get_current_user
-from models import User
+from models import User, UserRole
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
+@router.post("/register", response_model=UserResponse)
+async def register(user_data: UserCreate, db: Session = Depends(get_db)):
+    # Verificar se username já existe
+    if get_user_by_username(db, user_data.username):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already registered"
+        )
+    
+    # Verificar se email já existe
+    existing_user = db.query(User).filter(User.email == user_data.email).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+    
+    # Criar novo usuário
+    new_user = User(
+        username=user_data.username,
+        email=user_data.email,
+        cpf=user_data.cpf,
+        phone=user_data.phone,
+        password_hash=get_password_hash(user_data.password),
+        role=UserRole.USER,
+        balance=0.0,
+        is_active=True,
+        is_verified=False
+    )
+    
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    return new_user
+
+
 @router.post("/login", response_model=Token)
 async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
+    # authenticate_user já tenta por username e email
     user = authenticate_user(db, login_data.username, login_data.password)
+    
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

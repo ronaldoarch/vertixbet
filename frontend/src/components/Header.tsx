@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Gift, Menu as MenuIcon } from 'lucide-react';
+import { Gift, Menu as MenuIcon, Wallet, User } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 // Backend FastAPI - usa variável de ambiente ou fallback para localhost
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -11,6 +13,8 @@ interface HeaderProps {
 }
 
 export default function Header({ onMenuClick, onLoginClick, onRegisterClick }: HeaderProps) {
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -80,18 +84,43 @@ export default function Header({ onMenuClick, onLoginClick, onRegisterClick }: H
 
           {/* Botões de Ação */}
           <div className="flex items-center gap-2 md:gap-3">
-            <button 
-              onClick={onLoginClick}
-              className="px-2 md:px-4 py-1.5 md:py-2 text-sm md:text-base hover:text-[#d4af37] transition-colors font-medium"
-            >
-              Entrar
-            </button>
-            <button 
-              onClick={onRegisterClick}
-              className="px-3 md:px-6 py-1.5 md:py-2 bg-[#ff6b35] rounded-md hover:bg-[#ff7b35] transition-colors font-semibold text-sm md:text-base"
-            >
-              Registre-se
-            </button>
+            {user ? (
+              <>
+                {/* Saldo */}
+                <button
+                  onClick={() => navigate('/conta')}
+                  className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-[#0d5d4b] hover:bg-[#0f6d5b] rounded-md transition-colors"
+                >
+                  <Wallet size={18} className="text-[#d4af37]" />
+                  <span className="text-sm font-semibold">
+                    R$ {user.balance.toFixed(2).replace('.', ',')}
+                  </span>
+                </button>
+                {/* Perfil */}
+                <button
+                  onClick={() => navigate('/conta')}
+                  className="p-2 hover:bg-[#0d5d4b] rounded transition-colors"
+                  aria-label="Minha conta"
+                >
+                  <User size={20} />
+                </button>
+              </>
+            ) : (
+              <>
+                <button 
+                  onClick={onLoginClick}
+                  className="px-2 md:px-4 py-1.5 md:py-2 text-sm md:text-base hover:text-[#d4af37] transition-colors font-medium"
+                >
+                  Entrar
+                </button>
+                <button 
+                  onClick={onRegisterClick}
+                  className="px-3 md:px-6 py-1.5 md:py-2 bg-[#ff6b35] rounded-md hover:bg-[#ff7b35] transition-colors font-semibold text-sm md:text-base"
+                >
+                  Registre-se
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
