@@ -9,12 +9,17 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 export default function Game() {
   const { gameCode } = useParams<{ gameCode: string }>();
   const navigate = useNavigate();
-  const { user, token } = useAuth();
+  const { user, token, loading: authLoading } = useAuth();
   const [gameUrl, setGameUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Aguardar o AuthContext terminar de carregar
+    if (authLoading) {
+      return;
+    }
+
     if (!token || !user) {
       setError('Você precisa estar logado para jogar');
       setLoading(false);
@@ -41,7 +46,7 @@ export default function Game() {
         }
 
         const data = await res.json();
-        setGameUrl(data.game_url);
+        setGameUrl(data.game_url || data.launch_url);
       } catch (err: any) {
         setError(err.message || 'Erro ao carregar jogo');
       } finally {
@@ -50,7 +55,7 @@ export default function Game() {
     };
 
     launchGame();
-  }, [gameCode, token, user]);
+  }, [gameCode, token, user, authLoading]);
 
   if (loading) {
     return (
