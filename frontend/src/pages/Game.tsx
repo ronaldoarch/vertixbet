@@ -26,6 +26,13 @@ export default function Game() {
       return;
     }
 
+    // Verificar se o usuário tem saldo
+    if (!user.balance || user.balance <= 0) {
+      setError('Você precisa ter saldo para jogar. Faça um depósito primeiro.');
+      setLoading(false);
+      return;
+    }
+
     if (!gameCode) {
       setError('Código do jogo não encontrado');
       setLoading(false);
