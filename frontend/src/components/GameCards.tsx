@@ -10,11 +10,8 @@ export default function GameCards() {
   const games: GameCard[] = [
     { id: '1', title: 'Baixar Aplicativo', tag: 'GRÁTIS', tagColor: 'green' },
     { id: '2', title: 'Cashback de até 25%', tag: 'DEPOSITE', tagColor: 'green' },
-    { id: '3', title: 'Esportes Ao Vivo', tag: 'HOT', tagColor: 'red' },
     { id: '4', title: 'Cupom De Bônus', tag: 'GRÁTIS', tagColor: 'green' },
     { id: '5', title: 'Aviator Spribe', tag: 'HOT', tagColor: 'red' },
-    { id: '6', title: 'Mundial de Clubes', tag: 'HOT', tagColor: 'red' },
-    { id: '7', title: 'NBA USA', tag: 'HOT', tagColor: 'red' },
     { id: '8', title: 'Cachorro Sortudo', tag: 'NEW', tagColor: 'yellow' },
     { id: '9', title: 'Roleta Ao Vivo' },
     { id: '10', title: 'Fortune Tiger' },

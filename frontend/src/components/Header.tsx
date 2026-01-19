@@ -68,19 +68,13 @@ export default function Header({ onMenuClick, onLoginClick, onRegisterClick }: H
             </a>
           </div>
           
-          {/* Navegação CASSINO/ESPORTES - Na mesma linha */}
+          {/* Navegação CASSINO - Na mesma linha */}
           <nav className="hidden md:flex items-center gap-6">
             <a 
               href="/cassino" 
               className="py-2 px-3 border-b-2 border-[#ff6b35] text-white font-medium text-sm md:text-base hover:text-[#d4af37] transition-colors"
             >
               CASSINO
-            </a>
-            <a 
-              href="/esportes" 
-              className="py-2 px-3 border-b-2 border-transparent text-gray-300 font-medium text-sm md:text-base hover:text-[#d4af37] hover:border-[#d4af37] transition-colors"
-            >
-              ESPORTES
             </a>
           </nav>
 

@@ -13,11 +13,6 @@ export default function Footer() {
                 </a>
               </li>
               <li>
-                <a href="/esportes-ao-vivo" className="text-gray-400 hover:text-[#d4af37] transition-colors text-sm md:text-base">
-                  Esportes ao Vivo
-                </a>
-              </li>
-              <li>
                 <a href="/promocoes" className="text-gray-400 hover:text-[#d4af37] transition-colors text-sm md:text-base">
                   Promoções
                 </a>

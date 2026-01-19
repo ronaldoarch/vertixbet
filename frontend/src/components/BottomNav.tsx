@@ -1,4 +1,4 @@
-import { Menu, Activity, Wallet, User, MessageCircle } from 'lucide-react';
+import { Menu, Wallet, User, MessageCircle } from 'lucide-react';
 
 export default function BottomNav() {
   return (
@@ -8,10 +8,6 @@ export default function BottomNav() {
           <a href="/menu" className="flex flex-col items-center gap-1 hover:text-[#d4af37] transition-colors">
             <Menu size={24} />
             <span className="text-xs">Menu</span>
-          </a>
-          <a href="/esportes" className="flex flex-col items-center gap-1 hover:text-[#d4af37] transition-colors">
-            <Activity size={24} />
-            <span className="text-xs">Esportes</span>
           </a>
           <a href="/depositar" className="flex flex-col items-center gap-1 hover:text-[#d4af37] transition-colors">
             <div className="bg-[#ff6b35] p-2 rounded-lg">

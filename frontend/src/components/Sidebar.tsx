@@ -24,18 +24,6 @@ export default function Sidebar({ isOpen, onClose, filters, onFiltersChange, pro
 
   const liveGames = ['Jogo Ao Vivo', 'E-Sport'];
 
-  const sportsLeagues = [
-    'Brasileirão Série A',
-    'Série A',
-    'Copa Do Mundo De Clube',
-    'Champions League',
-    'Copa Libertadores',
-    'Copa Sul-Americana',
-    'NBA',
-  ];
-
-  const sportCategories = ['Futebol', 'Basquete', 'Tênis', 'Vôlei', 'Futebol Americano'];
-
   return (
     <>
       {/* Overlay para mobile */}
@@ -177,48 +165,6 @@ export default function Sidebar({ isOpen, onClose, filters, onFiltersChange, pro
                       className="block px-1 py-2 rounded-md text-xs hover:bg-[#0d5d4b] transition-all duration-200 text-gray-100 hover:text-white"
                     >
                       {game}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </nav>
-
-          {/* Ligas Esportivas */}
-          <nav className="border-b border-[#0d5d4b]">
-            <div className="flex items-center justify-between px-4 py-3 bg-[#0a4d3e]">
-              <h3 className="text-sm font-bold text-[#d4af37] uppercase tracking-wide">Ligas</h3>
-            </div>
-            <div className="px-4 pb-3">
-              <ul className="space-y-1">
-                {sportsLeagues.map((league) => (
-                  <li key={league}>
-                    <a
-                      href={`/esportes/${league.toLowerCase().replace(/\s+/g, '-')}`}
-                      className="block px-1 py-2 rounded-md text-xs hover:bg-[#0d5d4b] transition-all duration-200 text-gray-100 hover:text-white"
-                    >
-                      {league}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </nav>
-
-          {/* Categorias de Esportes */}
-          <nav className="border-b border-[#0d5d4b]">
-            <div className="flex items-center justify-between px-4 py-3 bg-[#0a4d3e]">
-              <h3 className="text-sm font-bold text-[#d4af37] uppercase tracking-wide">Esportes</h3>
-            </div>
-            <div className="px-4 pb-3">
-              <ul className="space-y-1">
-                {sportCategories.map((sport) => (
-                  <li key={sport}>
-                    <a
-                      href={`/esportes/${sport.toLowerCase()}`}
-                      className="block px-1 py-2 rounded-md text-xs hover:bg-[#0d5d4b] transition-all duration-200 text-gray-100 hover:text-white"
-                    >
-                      {sport}
                     </a>
                   </li>
                 ))}
