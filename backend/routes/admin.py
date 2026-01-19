@@ -651,10 +651,54 @@ async def launch_game(
     Follows IGameWin API documentation:
     - Uses user_code (username) to launch game
     - Returns launch_url from API response
+    - If provider_code is not provided, searches for the game in the game list to find its provider
     """
     api = get_igamewin_api(db)
     if not api:
         raise HTTPException(status_code=400, detail="Nenhum agente IGameWin ativo configurado")
+    
+    # Se provider_code não foi fornecido, buscar na lista de jogos
+    if not provider_code:
+        providers = await api.get_providers()
+        if providers is None:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Não foi possível obter provedores da IGameWin ({api.last_error or 'erro desconhecido'})"
+            )
+        
+        # Tentar encontrar o jogo em cada provider
+        found_provider = None
+        for provider in providers:
+            provider_code_to_try = provider.get("code") or provider.get("provider_code")
+            if not provider_code_to_try:
+                continue
+            
+            games = await api.get_games(provider_code=provider_code_to_try)
+            if games:
+                for game in games:
+                    game_code_from_api = game.get("game_code") or game.get("code") or game.get("game_id") or game.get("id")
+                    if game_code_from_api == game_code:
+                        found_provider = provider_code_to_try
+                        break
+                if found_provider:
+                    break
+        
+        if found_provider:
+            provider_code = found_provider
+        else:
+            # Se não encontrou, usar o primeiro provider ativo como fallback
+            active_providers = [p for p in providers if str(p.get("status", 1)) in ["1", "true", "True"]]
+            if active_providers:
+                provider_code = active_providers[0].get("code") or active_providers[0].get("provider_code")
+            elif providers:
+                provider_code = providers[0].get("code") or providers[0].get("provider_code")
+    
+    # Se ainda não tem provider_code, retornar erro
+    if not provider_code:
+        raise HTTPException(
+            status_code=400,
+            detail="provider_code é obrigatório. Não foi possível determinar o provider do jogo."
+        )
     
     # Gerar URL de lançamento do jogo usando user_code (username)
     launch_url = await api.launch_game(
@@ -674,6 +718,7 @@ async def launch_game(
         "game_url": launch_url,
         "launch_url": launch_url,  # Mantém compatibilidade
         "game_code": game_code,
+        "provider_code": provider_code,
         "username": current_user.username,
         "user_code": current_user.username
     }
