@@ -20,7 +20,11 @@ export default function Game() {
       return;
     }
 
+    // Debug: verificar estado de autenticação
+    console.log('Game - Auth state:', { token: !!token, user: !!user, authLoading });
+
     if (!token || !user) {
+      console.log('Game - Usuário não autenticado, redirecionando...');
       setError('Você precisa estar logado para jogar');
       setLoading(false);
       return;
@@ -34,20 +38,26 @@ export default function Game() {
 
     const launchGame = async () => {
       try {
+        console.log('Game - Iniciando jogo:', { gameCode, token: token?.substring(0, 20) + '...' });
         const res = await fetch(`${API_URL}/api/public/games/${gameCode}/launch?lang=pt`, {
           headers: {
             'Authorization': `Bearer ${token}`,
           },
         });
 
+        console.log('Game - Resposta do servidor:', { status: res.status, ok: res.ok });
+
         if (!res.ok) {
           const data = await res.json().catch(() => ({ detail: 'Erro ao iniciar jogo' }));
+          console.error('Game - Erro na resposta:', data);
           throw new Error(data.detail || 'Erro ao iniciar jogo');
         }
 
         const data = await res.json();
+        console.log('Game - Dados recebidos:', { hasGameUrl: !!data.game_url, hasLaunchUrl: !!data.launch_url });
         setGameUrl(data.game_url || data.launch_url);
       } catch (err: any) {
+        console.error('Game - Erro ao carregar jogo:', err);
         setError(err.message || 'Erro ao carregar jogo');
       } finally {
         setLoading(false);
