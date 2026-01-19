@@ -67,22 +67,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const userData = await res.json();
         console.log('AuthContext - Usuário carregado:', userData.username);
         setUser(userData);
+        setLoading(false); // Finalizar loading após setUser
       } else {
         console.error('AuthContext - Token inválido, status:', res.status);
         // Token inválido, limpar
         localStorage.removeItem('user_token');
         setToken(null);
         setUser(null);
+        setLoading(false);
       }
     } catch (err) {
       console.error('AuthContext - Erro ao buscar usuário:', err);
       localStorage.removeItem('user_token');
       setToken(null);
       setUser(null);
-    } finally {
       setLoading(false);
-      console.log('AuthContext - Loading finalizado');
     }
+    console.log('AuthContext - Loading finalizado');
   };
 
   const login = async (username: string, password: string) => {
