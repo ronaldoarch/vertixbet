@@ -1978,20 +1978,18 @@ function ThemesTab({ token }: { token: string }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [showNewForm, setShowNewForm] = useState(false);
   const [form, setForm] = useState({
     name: '',
-    colors_json: JSON.stringify({
-      primary: '#0a4d3e',
-      secondary: '#0d5d4b',
-      accent: '#d4af37',
-      background: '#0a0e0f',
-      text: '#ffffff',
-      textSecondary: '#9ca3af',
-      success: '#10b981',
-      error: '#ef4444',
-      warning: '#f59e0b'
-    }, null, 2),
-    is_active: false
+    primary: '#0a4d3e',
+    secondary: '#0d5d4b',
+    accent: '#d4af37',
+    background: '#0a0e0f',
+    text: '#ffffff',
+    textSecondary: '#9ca3af',
+    success: '#10b981',
+    error: '#ef4444',
+    warning: '#f59e0b'
   });
 
   useEffect(() => {
@@ -2046,12 +2044,27 @@ function ThemesTab({ token }: { token: string }) {
     }
   };
 
+  const getColorsJson = () => {
+    return JSON.stringify({
+      primary: form.primary,
+      secondary: form.secondary,
+      accent: form.accent,
+      background: form.background,
+      text: form.text,
+      textSecondary: form.textSecondary,
+      success: form.success,
+      error: form.error,
+      warning: form.warning
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
 
     try {
+      const colorsJson = getColorsJson();
       let res;
       if (editingId) {
         res = await fetch(`${API_URL}/api/admin/themes/${editingId}`, {
@@ -2062,8 +2075,7 @@ function ThemesTab({ token }: { token: string }) {
           },
           body: JSON.stringify({
             name: form.name,
-            colors_json: form.colors_json,
-            is_active: form.is_active
+            colors_json: colorsJson
           })
         });
       } else {
@@ -2073,7 +2085,11 @@ function ThemesTab({ token }: { token: string }) {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify(form)
+          body: JSON.stringify({
+            name: form.name,
+            colors_json: colorsJson,
+            is_active: false
+          })
         });
       }
 
@@ -2085,11 +2101,6 @@ function ThemesTab({ token }: { token: string }) {
       setSuccess(editingId ? 'Tema atualizado!' : 'Tema criado!');
       resetForm();
       fetchThemes();
-      // Aplicar tema se estiver ativo
-      if (form.is_active) {
-        applyThemeToPage(form.colors_json);
-        setTimeout(() => window.location.reload(), 1000);
-      }
     } catch (err: any) {
       setError(err.message);
     }
@@ -2098,29 +2109,40 @@ function ThemesTab({ token }: { token: string }) {
   const resetForm = () => {
     setForm({
       name: '',
-      colors_json: JSON.stringify({
-        primary: '#0a4d3e',
-        secondary: '#0d5d4b',
-        accent: '#d4af37',
-        background: '#0a0e0f',
-        text: '#ffffff',
-        textSecondary: '#9ca3af',
-        success: '#10b981',
-        error: '#ef4444',
-        warning: '#f59e0b'
-      }, null, 2),
-      is_active: false
+      primary: '#0a4d3e',
+      secondary: '#0d5d4b',
+      accent: '#d4af37',
+      background: '#0a0e0f',
+      text: '#ffffff',
+      textSecondary: '#9ca3af',
+      success: '#10b981',
+      error: '#ef4444',
+      warning: '#f59e0b'
     });
     setEditingId(null);
+    setShowNewForm(false);
   };
 
   const loadForEdit = (theme: any) => {
-    setEditingId(theme.id);
-    setForm({
-      name: theme.name,
-      colors_json: theme.colors_json,
-      is_active: theme.is_active
-    });
+    try {
+      const colors = JSON.parse(theme.colors_json);
+      setEditingId(theme.id);
+      setForm({
+        name: theme.name,
+        primary: colors.primary || '#0a4d3e',
+        secondary: colors.secondary || '#0d5d4b',
+        accent: colors.accent || '#d4af37',
+        background: colors.background || '#0a0e0f',
+        text: colors.text || '#ffffff',
+        textSecondary: colors.textSecondary || '#9ca3af',
+        success: colors.success || '#10b981',
+        error: colors.error || '#ef4444',
+        warning: colors.warning || '#f59e0b'
+      });
+      setShowNewForm(false);
+    } catch (err) {
+      console.error('Erro ao carregar tema para edição:', err);
+    }
   };
 
   const deleteTheme = async (id: number) => {
@@ -2132,6 +2154,9 @@ function ThemesTab({ token }: { token: string }) {
       });
       if (!res.ok) throw new Error('Erro ao deletar');
       fetchThemes();
+      if (editingId === id) {
+        resetForm();
+      }
     } catch (err: any) {
       setError(err.message);
     }
@@ -2160,98 +2185,212 @@ function ThemesTab({ token }: { token: string }) {
     }
   };
 
+  const ColorInput = ({ label, value, onChange, colorName }: { label: string; value: string; onChange: (v: string) => void; colorName: string }) => {
+    return (
+      <div>
+        <label className="block text-sm text-gray-400 mb-1">{label}</label>
+        <div className="flex items-center gap-2">
+          <div className="w-12 h-12 rounded border-2 border-gray-600" style={{ backgroundColor: value }} />
+          <input
+            type="text"
+            className="flex-1 bg-gray-700 rounded px-3 py-2 text-sm border border-gray-600 focus:border-[#d4af37] focus:outline-none font-mono"
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            placeholder="#000000"
+          />
+          <input
+            type="color"
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            className="w-12 h-12 rounded border border-gray-600 cursor-pointer"
+          />
+        </div>
+      </div>
+    );
+  };
+
+  const ThemeCard = ({ theme }: { theme: any }) => {
+    let colors: any = {};
+    try {
+      colors = JSON.parse(theme.colors_json);
+    } catch (err) {
+      colors = {};
+    }
+
+    const colorSwatches = [
+      colors.primary,
+      colors.secondary,
+      colors.accent,
+      colors.success
+    ].filter(Boolean);
+
+    return (
+      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-semibold">{theme.name}</h3>
+          {theme.is_active && (
+            <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded">Ativo</span>
+          )}
+        </div>
+        <div className="flex gap-2 mb-3">
+          {colorSwatches.map((color, idx) => (
+            <div
+              key={idx}
+              className="w-8 h-8 rounded border border-gray-600"
+              style={{ backgroundColor: color }}
+            />
+          ))}
+        </div>
+        <div className="flex gap-2">
+          {!theme.is_active && (
+            <button
+              onClick={() => activateTheme(theme.id)}
+              className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded text-sm"
+            >
+              Ativar
+            </button>
+          )}
+          <button
+            onClick={() => loadForEdit(theme)}
+            className="flex-1 px-3 py-2 bg-[#d4af37] hover:bg-[#ffd700] text-black rounded text-sm font-semibold"
+          >
+            Editar
+          </button>
+          {!theme.is_active && (
+            <button
+              onClick={() => deleteTheme(theme.id)}
+              className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm"
+            >
+              Deletar
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">Temas</h2>
-        <button onClick={fetchThemes} className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded">
-          <RefreshCw size={18} /> Atualizar
-        </button>
+        <h2 className="text-2xl font-bold">Gerenciar Temas</h2>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              resetForm();
+              setShowNewForm(true);
+            }}
+            className="px-4 py-2 bg-[#0a4d3e] hover:bg-[#0d5d4b] text-white font-semibold rounded flex items-center gap-2"
+          >
+            + Novo Tema
+          </button>
+          <button onClick={fetchThemes} className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded">
+            <RefreshCw size={18} /> Atualizar
+          </button>
+        </div>
       </div>
 
       {error && <div className="bg-red-500/20 border border-red-500 rounded p-3 mb-4 text-red-400">{error}</div>}
       {success && <div className="bg-green-500/20 border border-green-500 rounded p-3 mb-4 text-green-400">{success}</div>}
 
-      <div className="bg-gray-800 rounded-lg p-6 mb-6">
-        <h3 className="text-lg font-bold mb-4">{editingId ? 'Editar Tema' : 'Criar Novo Tema'}</h3>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">Nome do Tema</label>
-            <input
-              type="text"
-              className="w-full bg-gray-700 rounded px-3 py-2 text-sm border border-gray-600 focus:border-[#d4af37] focus:outline-none"
-              value={form.name}
-              onChange={e => setForm({...form, name: e.target.value})}
-              required
-              placeholder="Ex: Tema Escuro"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">Cores (JSON)</label>
-            <textarea
-              className="w-full bg-gray-700 rounded px-3 py-2 text-sm border border-gray-600 focus:border-[#d4af37] focus:outline-none font-mono"
-              value={form.colors_json}
-              onChange={e => setForm({...form, colors_json: e.target.value})}
-              required
-              rows={12}
-              placeholder='{"primary": "#0a4d3e", "secondary": "#0d5d4b", ...}'
-            />
-            <p className="text-xs text-gray-500 mt-1">Cores obrigatórias: primary, secondary, accent, background, text</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="is_active"
-              checked={form.is_active}
-              onChange={e => setForm({...form, is_active: e.target.checked})}
-              className="w-4 h-4"
-            />
-            <label htmlFor="is_active" className="text-sm text-gray-400">
-              Ativar este tema (desativa outros automaticamente)
-            </label>
-          </div>
-          <div className="flex gap-3">
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-4 py-2 bg-[#d4af37] hover:bg-[#ffd700] text-black font-semibold rounded disabled:opacity-50"
-            >
-              {editingId ? 'Atualizar' : 'Criar'}
-            </button>
-            {editingId && (
+      {(editingId || showNewForm) && (
+        <div className="bg-gray-800 rounded-lg p-6 mb-6 border border-gray-700">
+          <h3 className="text-lg font-bold mb-4">{editingId ? 'Editar Tema' : 'Criar Novo Tema'}</h3>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Nome do Tema</label>
+              <input
+                type="text"
+                className="w-full bg-gray-700 rounded px-3 py-2 text-sm border border-gray-600 focus:border-[#d4af37] focus:outline-none"
+                value={form.name}
+                onChange={e => setForm({...form, name: e.target.value})}
+                required
+                placeholder="Ex: Tema Escuro"
+              />
+            </div>
+            
+            <div className="grid md:grid-cols-2 gap-4">
+              <ColorInput
+                label="Cor Primária"
+                value={form.primary}
+                onChange={v => setForm({...form, primary: v})}
+                colorName="primary"
+              />
+              <ColorInput
+                label="Cor Secundária"
+                value={form.secondary}
+                onChange={v => setForm({...form, secondary: v})}
+                colorName="secondary"
+              />
+              <ColorInput
+                label="Cor de Acento"
+                value={form.accent}
+                onChange={v => setForm({...form, accent: v})}
+                colorName="accent"
+              />
+              <ColorInput
+                label="Cor de Sucesso"
+                value={form.success}
+                onChange={v => setForm({...form, success: v})}
+                colorName="success"
+              />
+              <ColorInput
+                label="Cor do Texto"
+                value={form.text}
+                onChange={v => setForm({...form, text: v})}
+                colorName="text"
+              />
+              <ColorInput
+                label="Cor do Texto Secundário"
+                value={form.textSecondary}
+                onChange={v => setForm({...form, textSecondary: v})}
+                colorName="textSecondary"
+              />
+              <ColorInput
+                label="Cor de Fundo"
+                value={form.background}
+                onChange={v => setForm({...form, background: v})}
+                colorName="background"
+              />
+              <ColorInput
+                label="Cor de Erro"
+                value={form.error}
+                onChange={v => setForm({...form, error: v})}
+                colorName="error"
+              />
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <button
+                type="submit"
+                disabled={loading}
+                className="px-6 py-2 bg-[#d4af37] hover:bg-[#ffd700] text-black font-semibold rounded disabled:opacity-50"
+              >
+                {editingId ? 'Atualizar Tema' : 'Criar Tema'}
+              </button>
               <button
                 type="button"
                 onClick={resetForm}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded"
+                className="px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded"
               >
                 Cancelar
               </button>
-            )}
-          </div>
-        </form>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {themes.map(theme => (
+          <ThemeCard key={theme.id} theme={theme} />
+        ))}
       </div>
 
-      <TabTable
-        title="Lista de Temas"
-        loading={loading}
-        error={error}
-        onRefresh={fetchThemes}
-        columns={['ID', 'Nome', 'Ativo', 'Ações']}
-        rows={themes.map(t => [
-          t.id,
-          t.name,
-          t.is_active ? <span className="text-green-400">SIM</span> : <span className="text-gray-400">NÃO</span>,
-          <div key={t.id} className="flex gap-2">
-            {!t.is_active && (
-              <button onClick={() => activateTheme(t.id)} className="text-green-400 hover:text-green-300 text-xs">Ativar</button>
-            )}
-            <button onClick={() => loadForEdit(t)} className="text-blue-400 hover:text-blue-300 text-xs">Editar</button>
-            {!t.is_active && (
-              <button onClick={() => deleteTheme(t.id)} className="text-red-400 hover:text-red-300 text-xs">Deletar</button>
-            )}
-          </div>
-        ])}
-      />
+      {themes.length === 0 && !loading && (
+        <div className="text-center py-12 text-gray-400">
+          <p>Nenhum tema criado ainda.</p>
+          <p className="text-sm mt-2">Clique em "+ Novo Tema" para criar seu primeiro tema.</p>
+        </div>
+      )}
     </div>
   );
 }
