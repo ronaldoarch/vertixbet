@@ -6,7 +6,7 @@ import {
   ArrowDownCircle, Activity, RefreshCw,
   Image as ImageIcon, Home, BarChart3,
   ChevronUp, ChevronDown, Percent, FileText, 
-  Gift, ShoppingBag, Tag
+  Gift, ShoppingBag, Tag, Gamepad2
 } from 'lucide-react';
 import type { ThemePalette } from '../utils/themeManager';
 import { applyThemeToDocument, getThemeList, saveThemeList, setActiveTheme } from '../utils/themeManager';
@@ -244,6 +244,12 @@ export default function Admin() {
                 label="FTDs"
                 active={activeTab === 'ftds'}
                 onClick={() => setActiveTab('ftds')}
+              />
+              <NavSubItem
+                icon={<Gamepad2 />}
+                label="IGameWin"
+                active={activeTab === 'igamewin'}
+                onClick={() => setActiveTab('igamewin')}
               />
             </NavSection>
           </nav>
