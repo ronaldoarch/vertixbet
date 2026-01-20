@@ -11,7 +11,8 @@ from database import get_db
 from dependencies import get_current_admin_user, get_current_user
 from models import (
     User, Deposit, Withdrawal, FTD, Gateway, IGameWinAgent, FTDSettings,
-    TransactionStatus, UserRole, Bet, BetStatus, Notification, NotificationType
+    TransactionStatus, UserRole, Bet, BetStatus, Notification, NotificationType,
+    Affiliate, Theme
 )
 from schemas import (
     UserResponse, UserCreate, UserUpdate,
@@ -20,7 +21,9 @@ from schemas import (
     FTDResponse, FTDCreate, FTDUpdate,
     GatewayResponse, GatewayCreate, GatewayUpdate,
     IGameWinAgentResponse, IGameWinAgentCreate, IGameWinAgentUpdate,
-    FTDSettingsResponse, FTDSettingsCreate, FTDSettingsUpdate
+    FTDSettingsResponse, FTDSettingsCreate, FTDSettingsUpdate,
+    AffiliateResponse, AffiliateCreate, AffiliateUpdate,
+    ThemeResponse, ThemeCreate, ThemeUpdate
 )
 from auth import get_password_hash
 from igamewin_api import get_igamewin_api
@@ -1231,3 +1234,272 @@ async def delete_notification(
     db.commit()
     
     return {"success": True, "message": "Notificação deletada com sucesso"}
+
+
+# ========== AFFILIATES ==========
+@router.get("/affiliates", response_model=List[AffiliateResponse])
+async def get_affiliates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """Lista todos os afiliados"""
+    affiliates = db.query(Affiliate).offset(skip).limit(limit).all()
+    return affiliates
+
+
+@router.get("/affiliates/{affiliate_id}", response_model=AffiliateResponse)
+async def get_affiliate(
+    affiliate_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """Busca um afiliado específico"""
+    affiliate = db.query(Affiliate).filter(Affiliate.id == affiliate_id).first()
+    if not affiliate:
+        raise HTTPException(status_code=404, detail="Afiliado não encontrado")
+    return affiliate
+
+
+@router.post("/affiliates", response_model=AffiliateResponse, status_code=status.HTTP_201_CREATED)
+async def create_affiliate(
+    affiliate_data: AffiliateCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """Cria um novo afiliado"""
+    # Verificar se o usuário existe
+    user = db.query(User).filter(User.id == affiliate_data.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    
+    # Verificar se já existe afiliado para este usuário
+    existing = db.query(Affiliate).filter(Affiliate.user_id == affiliate_data.user_id).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Este usuário já é um afiliado")
+    
+    # Verificar se o código já existe
+    existing_code = db.query(Affiliate).filter(Affiliate.affiliate_code == affiliate_data.affiliate_code).first()
+    if existing_code:
+        raise HTTPException(status_code=400, detail="Código de afiliado já existe")
+    
+    affiliate = Affiliate(
+        user_id=affiliate_data.user_id,
+        affiliate_code=affiliate_data.affiliate_code,
+        cpa_amount=affiliate_data.cpa_amount,
+        revshare_percentage=affiliate_data.revshare_percentage
+    )
+    
+    db.add(affiliate)
+    db.commit()
+    db.refresh(affiliate)
+    
+    return affiliate
+
+
+@router.put("/affiliates/{affiliate_id}", response_model=AffiliateResponse)
+async def update_affiliate(
+    affiliate_id: int,
+    affiliate_data: AffiliateUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """Atualiza um afiliado (CPA e revshare)"""
+    affiliate = db.query(Affiliate).filter(Affiliate.id == affiliate_id).first()
+    if not affiliate:
+        raise HTTPException(status_code=404, detail="Afiliado não encontrado")
+    
+    if affiliate_data.cpa_amount is not None:
+        affiliate.cpa_amount = affiliate_data.cpa_amount
+    
+    if affiliate_data.revshare_percentage is not None:
+        if affiliate_data.revshare_percentage < 0 or affiliate_data.revshare_percentage > 100:
+            raise HTTPException(status_code=400, detail="Revshare deve estar entre 0 e 100")
+        affiliate.revshare_percentage = affiliate_data.revshare_percentage
+    
+    if affiliate_data.is_active is not None:
+        affiliate.is_active = affiliate_data.is_active
+    
+    db.commit()
+    db.refresh(affiliate)
+    
+    return affiliate
+
+
+@router.delete("/affiliates/{affiliate_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_affiliate(
+    affiliate_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """Deleta um afiliado"""
+    affiliate = db.query(Affiliate).filter(Affiliate.id == affiliate_id).first()
+    if not affiliate:
+        raise HTTPException(status_code=404, detail="Afiliado não encontrado")
+    
+    db.delete(affiliate)
+    db.commit()
+
+
+# ========== THEMES ==========
+@router.get("/themes", response_model=List[ThemeResponse])
+async def get_themes(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """Lista todos os temas"""
+    themes = db.query(Theme).all()
+    return themes
+
+
+@router.get("/themes/active", response_model=ThemeResponse)
+async def get_active_theme(
+    db: Session = Depends(get_db)
+):
+    """Retorna o tema ativo (público, não requer autenticação)"""
+    theme = db.query(Theme).filter(Theme.is_active == True).first()
+    if not theme:
+        # Retornar tema padrão se não houver tema ativo
+        default_colors = {
+            "primary": "#0a4d3e",
+            "secondary": "#0d5d4b",
+            "accent": "#d4af37",
+            "background": "#0a0e0f",
+            "text": "#ffffff",
+            "textSecondary": "#9ca3af",
+            "success": "#10b981",
+            "error": "#ef4444",
+            "warning": "#f59e0b"
+        }
+        return {
+            "id": 0,
+            "name": "Default",
+            "colors_json": json.dumps(default_colors),
+            "is_active": True,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+    return theme
+
+
+@public_router.get("/themes/active", response_model=ThemeResponse)
+async def get_active_theme_public(
+    db: Session = Depends(get_db)
+):
+    """Retorna o tema ativo (público)"""
+    return await get_active_theme(db)
+
+
+@router.get("/themes/{theme_id}", response_model=ThemeResponse)
+async def get_theme(
+    theme_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """Busca um tema específico"""
+    theme = db.query(Theme).filter(Theme.id == theme_id).first()
+    if not theme:
+        raise HTTPException(status_code=404, detail="Tema não encontrado")
+    return theme
+
+
+@router.post("/themes", response_model=ThemeResponse, status_code=status.HTTP_201_CREATED)
+async def create_theme(
+    theme_data: ThemeCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """Cria um novo tema"""
+    # Verificar se o nome já existe
+    existing = db.query(Theme).filter(Theme.name == theme_data.name).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Tema com este nome já existe")
+    
+    # Validar JSON de cores
+    try:
+        colors = json.loads(theme_data.colors_json)
+        required_colors = ["primary", "secondary", "accent", "background", "text"]
+        for color in required_colors:
+            if color not in colors:
+                raise HTTPException(status_code=400, detail=f"Cor '{color}' é obrigatória")
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="colors_json deve ser um JSON válido")
+    
+    # Se este tema será ativo, desativar outros
+    if theme_data.is_active:
+        db.query(Theme).update({Theme.is_active: False})
+    
+    theme = Theme(
+        name=theme_data.name,
+        colors_json=theme_data.colors_json,
+        is_active=theme_data.is_active
+    )
+    
+    db.add(theme)
+    db.commit()
+    db.refresh(theme)
+    
+    return theme
+
+
+@router.put("/themes/{theme_id}", response_model=ThemeResponse)
+async def update_theme(
+    theme_id: int,
+    theme_data: ThemeUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """Atualiza um tema"""
+    theme = db.query(Theme).filter(Theme.id == theme_id).first()
+    if not theme:
+        raise HTTPException(status_code=404, detail="Tema não encontrado")
+    
+    if theme_data.name is not None:
+        # Verificar se o nome já existe em outro tema
+        existing = db.query(Theme).filter(Theme.name == theme_data.name, Theme.id != theme_id).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Tema com este nome já existe")
+        theme.name = theme_data.name
+    
+    if theme_data.colors_json is not None:
+        # Validar JSON de cores
+        try:
+            colors = json.loads(theme_data.colors_json)
+            required_colors = ["primary", "secondary", "accent", "background", "text"]
+            for color in required_colors:
+                if color not in colors:
+                    raise HTTPException(status_code=400, detail=f"Cor '{color}' é obrigatória")
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="colors_json deve ser um JSON válido")
+        theme.colors_json = theme_data.colors_json
+    
+    if theme_data.is_active is not None:
+        # Se ativando este tema, desativar outros
+        if theme_data.is_active:
+            db.query(Theme).filter(Theme.id != theme_id).update({Theme.is_active: False})
+        theme.is_active = theme_data.is_active
+    
+    db.commit()
+    db.refresh(theme)
+    
+    return theme
+
+
+@router.delete("/themes/{theme_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_theme(
+    theme_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """Deleta um tema"""
+    theme = db.query(Theme).filter(Theme.id == theme_id).first()
+    if not theme:
+        raise HTTPException(status_code=404, detail="Tema não encontrado")
+    
+    # Não permitir deletar tema ativo
+    if theme.is_active:
+        raise HTTPException(status_code=400, detail="Não é possível deletar o tema ativo")
+    
+    db.delete(theme)
+    db.commit()

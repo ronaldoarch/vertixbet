@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Wallet, User, Mail, Phone, CreditCard, LogOut, ArrowLeft } from 'lucide-react';
+import { Wallet, User, Mail, Phone, CreditCard, LogOut, ArrowLeft, UserCog } from 'lucide-react';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export default function Profile() {
   const navigate = useNavigate();
   const { user, token, logout } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [isAffiliate, setIsAffiliate] = useState(false);
 
   useEffect(() => {
     if (!token) {
@@ -15,8 +18,24 @@ export default function Profile() {
     }
     if (user) {
       setLoading(false);
+      checkAffiliate();
     }
   }, [token, user, navigate]);
+
+  const checkAffiliate = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/api/public/affiliate/dashboard`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setIsAffiliate(true);
+      }
+    } catch (err) {
+      // Usuário não é afiliado
+      setIsAffiliate(false);
+    }
+  };
 
   const handleLogout = () => {
     logout();
@@ -142,6 +161,15 @@ export default function Profile() {
             >
               Minhas Apostas
             </button>
+            {isAffiliate && (
+              <button
+                onClick={() => navigate('/afiliado')}
+                className="w-full bg-[#d4af37]/20 hover:bg-[#d4af37]/30 border border-[#d4af37] text-[#d4af37] font-semibold py-3 rounded-lg transition-colors flex items-center gap-2 text-left px-4"
+              >
+                <UserCog size={18} />
+                Painel do Afiliado
+              </button>
+            )}
             <button
               onClick={handleLogout}
               className="w-full bg-red-600/20 hover:bg-red-600/30 border border-red-600 text-red-400 font-semibold py-3 rounded-lg transition-colors flex items-center justify-center gap-2"

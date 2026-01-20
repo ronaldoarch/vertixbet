@@ -482,3 +482,44 @@ async def webhook_igamewin_bet(request: Request, db: Session = Depends(get_db)):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Erro ao processar webhook: {str(e)}")
+
+
+# ========== AFFILIATE PANEL ==========
+@affiliate_router.get("/dashboard", response_model=AffiliateResponse)
+async def get_affiliate_dashboard(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Painel do afiliado - retorna dados do afiliado logado"""
+    affiliate = db.query(Affiliate).filter(Affiliate.user_id == current_user.id).first()
+    if not affiliate:
+        raise HTTPException(status_code=404, detail="Você não é um afiliado")
+    
+    return affiliate
+
+
+@affiliate_router.get("/stats")
+async def get_affiliate_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Estatísticas do afiliado"""
+    affiliate = db.query(Affiliate).filter(Affiliate.user_id == current_user.id).first()
+    if not affiliate:
+        raise HTTPException(status_code=404, detail="Você não é um afiliado")
+    
+    # Buscar usuários referenciados por este afiliado (via affiliate_code no metadata)
+    # Isso depende de como você armazena a referência do afiliado nos usuários
+    # Por enquanto, retornamos os dados do afiliado
+    
+    return {
+        "affiliate_code": affiliate.affiliate_code,
+        "cpa_amount": affiliate.cpa_amount,
+        "revshare_percentage": affiliate.revshare_percentage,
+        "total_earnings": affiliate.total_earnings,
+        "total_cpa_earned": affiliate.total_cpa_earned,
+        "total_revshare_earned": affiliate.total_revshare_earned,
+        "total_referrals": affiliate.total_referrals,
+        "total_deposits": affiliate.total_deposits,
+        "is_active": affiliate.is_active
+    }

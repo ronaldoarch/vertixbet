@@ -12,6 +12,7 @@ import ChatWidget from './components/ChatWidget';
 import LoginModal from './components/LoginModal';
 import RegisterModal from './components/RegisterModal';
 import { applyBrandAssets, applyThemeToDocument, initThemeAndBrandFromStorage } from './utils/themeManager';
+import { useTheme } from './contexts/ThemeContext';
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -19,6 +20,7 @@ function App() {
   const [registerOpen, setRegisterOpen] = useState(false);
   const [filters, setFilters] = useState({ query: '', provider: '' });
   const [providers, setProviders] = useState<string[]>([]);
+  const { theme } = useTheme();
 
   const handleFiltersChange = (partial: { query?: string; provider?: string }) => {
     setFilters((prev) => ({ ...prev, ...partial }));
@@ -42,6 +44,19 @@ function App() {
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, []);
+
+  // Aplicar tema do backend quando disponível
+  useEffect(() => {
+    if (theme) {
+      const root = document.documentElement;
+      root.style.setProperty('--color-primary', theme.primary);
+      root.style.setProperty('--color-secondary', theme.secondary);
+      root.style.setProperty('--color-accent', theme.accent);
+      root.style.setProperty('--color-background', theme.background);
+      root.style.setProperty('--color-text', theme.text);
+      root.style.setProperty('--color-text-secondary', theme.textSecondary);
+    }
+  }, [theme]);
 
   return (
     <div className="min-h-screen bg-[#0a0e0f] text-white">

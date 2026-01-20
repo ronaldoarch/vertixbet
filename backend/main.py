@@ -45,6 +45,7 @@ app.include_router(media.router)
 app.include_router(media.public_router)
 app.include_router(payments.router)
 app.include_router(payments.webhook_router)
+app.include_router(payments.affiliate_router)
 
 
 @app.on_event("startup")

@@ -6,6 +6,7 @@ import Profile from './pages/Profile';
 import Game from './pages/Game';
 import Deposit from './pages/Deposit';
 import Withdrawal from './pages/Withdrawal';
+import AffiliatePanel from './pages/AffiliatePanel';
 
 export default function AppRouter() {
   return (
@@ -16,6 +17,7 @@ export default function AppRouter() {
         <Route path="/depositar" element={<Deposit />} />
         <Route path="/sacar" element={<Withdrawal />} />
         <Route path="/jogo/:gameCode" element={<Game />} />
+        <Route path="/afiliado" element={<AffiliatePanel />} />
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="*" element={<Navigate to="/" replace />} />

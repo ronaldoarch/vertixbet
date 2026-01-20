@@ -252,3 +252,65 @@ class MediaAssetResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+# Affiliate Schemas
+class AffiliateBase(BaseModel):
+    user_id: int
+    affiliate_code: str
+    cpa_amount: float = 0.0
+    revshare_percentage: float = 0.0
+    is_active: bool = True
+
+
+class AffiliateCreate(BaseModel):
+    user_id: int
+    affiliate_code: str
+    cpa_amount: float = 0.0
+    revshare_percentage: float = 0.0
+
+
+class AffiliateUpdate(BaseModel):
+    cpa_amount: Optional[float] = None
+    revshare_percentage: Optional[float] = None
+    is_active: Optional[bool] = None
+
+
+class AffiliateResponse(AffiliateBase):
+    id: int
+    total_earnings: float
+    total_cpa_earned: float
+    total_revshare_earned: float
+    total_referrals: int
+    total_deposits: float
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+# Theme Schemas
+class ThemeBase(BaseModel):
+    name: str
+    colors_json: str
+    is_active: bool = False
+
+
+class ThemeCreate(ThemeBase):
+    pass
+
+
+class ThemeUpdate(BaseModel):
+    name: Optional[str] = None
+    colors_json: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class ThemeResponse(ThemeBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True

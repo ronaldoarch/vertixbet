@@ -208,3 +208,48 @@ class Notification(Base):
     
     # Relationships
     user = relationship("User")
+
+
+class Affiliate(Base):
+    __tablename__ = "affiliates"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)  # Um usuário = um afiliado
+    affiliate_code = Column(String(50), unique=True, index=True, nullable=False)  # Código único do afiliado
+    cpa_amount = Column(Float, default=0.0, nullable=False)  # Valor do CPA (Cost Per Acquisition)
+    revshare_percentage = Column(Float, default=0.0, nullable=False)  # Percentual de revshare (0-100)
+    total_earnings = Column(Float, default=0.0, nullable=False)  # Total ganho pelo afiliado
+    total_cpa_earned = Column(Float, default=0.0, nullable=False)  # Total ganho em CPA
+    total_revshare_earned = Column(Float, default=0.0, nullable=False)  # Total ganho em revshare
+    total_referrals = Column(Integer, default=0, nullable=False)  # Total de indicações
+    total_deposits = Column(Float, default=0.0, nullable=False)  # Total depositado pelos indicados
+    is_active = Column(Boolean, default=True, nullable=False)
+    metadata_json = Column(Text)  # JSON com dados adicionais
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User")
+
+
+class Theme(Base):
+    __tablename__ = "themes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), unique=True, nullable=False)  # Nome do tema
+    is_active = Column(Boolean, default=False, nullable=False)  # Apenas um tema pode estar ativo
+    colors_json = Column(Text, nullable=False)  # JSON com as cores do tema
+    # Estrutura esperada:
+    # {
+    #   "primary": "#0a4d3e",
+    #   "secondary": "#0d5d4b",
+    #   "accent": "#d4af37",
+    #   "background": "#0a0e0f",
+    #   "text": "#ffffff",
+    #   "textSecondary": "#gray-300",
+    #   "success": "#10b981",
+    #   "error": "#ef4444",
+    #   "warning": "#f59e0b"
+    # }
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

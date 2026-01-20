@@ -6,7 +6,7 @@ import {
   ArrowDownCircle, Activity, RefreshCw,
   Image as ImageIcon, Home, BarChart3,
   ChevronUp, ChevronDown, Percent, FileText, 
-  Gift, ShoppingBag, Tag, Gamepad2
+  Gift, ShoppingBag, Tag, Gamepad2, UserCog, Palette
 } from 'lucide-react';
 import type { ThemePalette } from '../utils/themeManager';
 import { applyThemeToDocument, getThemeList, saveThemeList, setActiveTheme } from '../utils/themeManager';
@@ -251,6 +251,18 @@ export default function Admin() {
                 active={activeTab === 'igamewin'}
                 onClick={() => setActiveTab('igamewin')}
               />
+              <NavSubItem
+                icon={<UserCog />}
+                label="Afiliados"
+                active={activeTab === 'affiliates'}
+                onClick={() => setActiveTab('affiliates')}
+              />
+              <NavSubItem
+                icon={<Palette />}
+                label="Temas"
+                active={activeTab === 'themes'}
+                onClick={() => setActiveTab('themes')}
+              />
             </NavSection>
           </nav>
         </aside>
@@ -264,9 +276,10 @@ export default function Admin() {
           {activeTab === 'ftds' && <FTDsTab token={token || ''} />}
           {activeTab === 'gateways' && <GatewaysTab token={token || ''} />}
           {activeTab === 'igamewin' && <IGameWinTab token={token || ''} />}
+          {activeTab === 'affiliates' && <AffiliatesTab token={token || ''} />}
+          {activeTab === 'themes' && <ThemesTab token={token || ''} />}
           {activeTab === 'settings' && <SettingsTab token={token || ''} />}
           {activeTab === 'branding' && <BrandingTab token={token || ''} />}
-          {activeTab === 'themes' && <ThemesTab />}
           {activeTab === 'ggr' && <GGRTab token={token || ''} />}
           {activeTab === 'bets' && <BetsTab token={token || ''} />}
           {activeTab === 'notifications' && <NotificationsTab token={token || ''} />}
@@ -1700,105 +1713,532 @@ function BrandingTab({ token }: { token: string }) {
   );
 }
 
-function ThemesTab() {
-  const [themes, setThemes] = useState<ThemePalette[]>(() => getThemeList());
-  const [form, setForm] = useState<ThemePalette>({
-    id: makeId(),
-    name: 'Novo tema',
-    bg: '#0a0e0f',
-    surface: '#0d1415',
-    card: '#0f1b1d',
-    accent: '#d4af37',
-    accentSoft: '#0f6f5a',
-    text: '#ffffff',
-    muted: '#cbd5e1'
+// ========== AFFILIATES TAB ==========
+function AffiliatesTab({ token }: { token: string }) {
+  const [affiliates, setAffiliates] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState({
+    user_id: '',
+    affiliate_code: '',
+    cpa_amount: '',
+    revshare_percentage: ''
   });
-  const [activeId, setActiveId] = useState(() => {
-    const active = typeof localStorage !== 'undefined' ? localStorage.getItem('fv_theme_active') : null;
-    return active || 'default';
-  });
+  const [users, setUsers] = useState<any[]>([]);
 
-  const saveTheme = () => {
-    const list = themes.some((t) => t.id === form.id) ? themes.map((t) => (t.id === form.id ? form : t)) : [...themes, form];
-    setThemes(list);
-    saveThemeList(list);
-    setForm({ ...form, id: makeId(), name: 'Novo tema' });
-  };
+  useEffect(() => {
+    fetchAffiliates();
+    fetchUsers();
+  }, []);
 
-  const applyTheme = (theme: ThemePalette) => {
-    setActiveId(theme.id);
-    setActiveTheme(theme);
-  };
-
-  const removeTheme = (id: string) => {
-    if (id === 'default') return;
-    const list = themes.filter((t) => t.id !== id);
-    setThemes(list);
-    saveThemeList(list);
-    if (activeId === id) {
-      const fallback = list[0];
-      if (fallback) applyTheme(fallback);
+  const fetchUsers = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/users`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUsers(data);
+      }
+    } catch (err: any) {
+      console.error('Erro ao carregar usuários:', err);
     }
   };
 
-  const handleField = (key: keyof ThemePalette, value: string) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
+  const fetchAffiliates = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_URL}/api/admin/affiliates`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Falha ao carregar afiliados');
+      setAffiliates(await res.json());
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => {
-    applyThemeToDocument(themes.find((t) => t.id === activeId));
-  }, [activeId, themes]);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+
+    try {
+      const payload = {
+        user_id: parseInt(form.user_id),
+        affiliate_code: form.affiliate_code,
+        cpa_amount: parseFloat(form.cpa_amount) || 0,
+        revshare_percentage: parseFloat(form.revshare_percentage) || 0
+      };
+
+      let res;
+      if (editingId) {
+        res = await fetch(`${API_URL}/api/admin/affiliates/${editingId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            cpa_amount: payload.cpa_amount,
+            revshare_percentage: payload.revshare_percentage
+          })
+        });
+      } else {
+        res = await fetch(`${API_URL}/api/admin/affiliates`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+      }
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Erro ao salvar afiliado');
+      }
+
+      setSuccess(editingId ? 'Afiliado atualizado!' : 'Afiliado criado!');
+      resetForm();
+      fetchAffiliates();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  const resetForm = () => {
+    setForm({ user_id: '', affiliate_code: '', cpa_amount: '', revshare_percentage: '' });
+    setEditingId(null);
+  };
+
+  const loadForEdit = (affiliate: any) => {
+    setEditingId(affiliate.id);
+    setForm({
+      user_id: affiliate.user_id.toString(),
+      affiliate_code: affiliate.affiliate_code,
+      cpa_amount: affiliate.cpa_amount.toString(),
+      revshare_percentage: affiliate.revshare_percentage.toString()
+    });
+  };
+
+  const deleteAffiliate = async (id: number) => {
+    if (!confirm('Tem certeza que deseja deletar este afiliado?')) return;
+    try {
+      const res = await fetch(`${API_URL}/api/admin/affiliates/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Erro ao deletar');
+      fetchAffiliates();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h2 className="text-2xl font-bold">Temas</h2>
-        <p className="text-sm text-gray-400">Crie e aplique temas em tempo real. As cores refletem imediatamente na plataforma.</p>
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold">Afiliados</h2>
+        <button onClick={fetchAffiliates} className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded">
+          <RefreshCw size={18} /> Atualizar
+        </button>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-4 bg-gray-800/60 p-4 rounded border border-gray-700">
-        <div className="space-y-3">
-          <label className="text-sm text-gray-300">Nome do tema</label>
-          <input className="w-full bg-gray-700 rounded px-3 py-2" value={form.name} onChange={(e) => handleField('name', e.target.value)} />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <ColorInput label="Fundo" value={form.bg} onChange={(v) => handleField('bg', v)} />
-          <ColorInput label="Superfície" value={form.surface} onChange={(v) => handleField('surface', v)} />
-          <ColorInput label="Cards" value={form.card} onChange={(v) => handleField('card', v)} />
-          <ColorInput label="Acento" value={form.accent} onChange={(v) => handleField('accent', v)} />
-          <ColorInput label="Acento suave" value={form.accentSoft} onChange={(v) => handleField('accentSoft', v)} />
-          <ColorInput label="Texto" value={form.text} onChange={(v) => handleField('text', v)} />
-          <ColorInput label="Texto secundário" value={form.muted} onChange={(v) => handleField('muted', v)} />
-        </div>
-        <div className="md:col-span-2 flex gap-3">
-          <button onClick={saveTheme} className="bg-[#ff6b35] hover:bg-[#ff7b35] text-white px-4 py-2 rounded font-semibold">Salvar tema</button>
-          <button onClick={() => applyTheme(form)} className="px-4 py-2 border border-gray-600 rounded hover:border-gray-400">Aplicar agora</button>
-        </div>
-      </div>
+      {error && <div className="bg-red-500/20 border border-red-500 rounded p-3 mb-4 text-red-400">{error}</div>}
+      {success && <div className="bg-green-500/20 border border-green-500 rounded p-3 mb-4 text-green-400">{success}</div>}
 
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {themes.map((t) => (
-          <div key={t.id} className={`p-4 rounded border ${activeId === t.id ? 'border-[#d4af37]' : 'border-gray-700'} bg-gray-800/60`}>
-            <div className="flex items-center justify-between mb-2">
-              <div>
-                <h3 className="font-semibold">{t.name}</h3>
-                <p className="text-xs text-gray-400">ID: {t.id}</p>
-              </div>
-              <div className="flex gap-1">
-                <Swatch color={t.bg} />
-                <Swatch color={t.card} />
-                <Swatch color={t.accent} />
-              </div>
+      <div className="bg-gray-800 rounded-lg p-6 mb-6">
+        <h3 className="text-lg font-bold mb-4">{editingId ? 'Editar Afiliado' : 'Criar Novo Afiliado'}</h3>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Usuário</label>
+              <select
+                className="w-full bg-gray-700 rounded px-3 py-2 text-sm border border-gray-600 focus:border-[#d4af37] focus:outline-none"
+                value={form.user_id}
+                onChange={e => setForm({...form, user_id: e.target.value})}
+                required={!editingId}
+                disabled={!!editingId}
+              >
+                <option value="">Selecione um usuário</option>
+                {users.map(u => (
+                  <option key={u.id} value={u.id}>{u.username} ({u.email})</option>
+                ))}
+              </select>
             </div>
-            <div className="flex gap-2">
-              <button onClick={() => applyTheme(t)} className="flex-1 bg-[#0f6f5a] hover:bg-[#158f75] text-white py-1.5 rounded text-sm">Aplicar</button>
-              {t.id !== 'default' && (
-                <button onClick={() => removeTheme(t.id)} className="px-3 py-1.5 border border-gray-700 rounded text-sm hover:border-gray-500">Excluir</button>
-              )}
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Código do Afiliado</label>
+              <input
+                type="text"
+                className="w-full bg-gray-700 rounded px-3 py-2 text-sm border border-gray-600 focus:border-[#d4af37] focus:outline-none"
+                value={form.affiliate_code}
+                onChange={e => setForm({...form, affiliate_code: e.target.value})}
+                required={!editingId}
+                disabled={!!editingId}
+                placeholder="Ex: AFF001"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">CPA (R$)</label>
+              <input
+                type="number"
+                step="0.01"
+                className="w-full bg-gray-700 rounded px-3 py-2 text-sm border border-gray-600 focus:border-[#d4af37] focus:outline-none"
+                value={form.cpa_amount}
+                onChange={e => setForm({...form, cpa_amount: e.target.value})}
+                required
+                placeholder="0.00"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Revshare (%)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                className="w-full bg-gray-700 rounded px-3 py-2 text-sm border border-gray-600 focus:border-[#d4af37] focus:outline-none"
+                value={form.revshare_percentage}
+                onChange={e => setForm({...form, revshare_percentage: e.target.value})}
+                required
+                placeholder="0.00"
+              />
             </div>
           </div>
-        ))}
+          <div className="flex gap-3">
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-4 py-2 bg-[#d4af37] hover:bg-[#ffd700] text-black font-semibold rounded disabled:opacity-50"
+            >
+              {editingId ? 'Atualizar' : 'Criar'}
+            </button>
+            {editingId && (
+              <button
+                type="button"
+                onClick={resetForm}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded"
+              >
+                Cancelar
+              </button>
+            )}
+          </div>
+        </form>
       </div>
+
+      <TabTable
+        title="Lista de Afiliados"
+        loading={loading}
+        error={error}
+        onRefresh={fetchAffiliates}
+        columns={['ID', 'Usuário', 'Código', 'CPA (R$)', 'Revshare (%)', 'Total Ganho', 'Indicações', 'Status', 'Ações']}
+        rows={affiliates.map(a => [
+          a.id,
+          a.user_id,
+          a.affiliate_code,
+          `R$ ${a.cpa_amount.toFixed(2)}`,
+          `${a.revshare_percentage.toFixed(2)}%`,
+          `R$ ${a.total_earnings.toFixed(2)}`,
+          a.total_referrals,
+          a.is_active ? 'Ativo' : 'Inativo',
+          <div key={a.id} className="flex gap-2">
+            <button onClick={() => loadForEdit(a)} className="text-blue-400 hover:text-blue-300 text-xs">Editar</button>
+            <button onClick={() => deleteAffiliate(a.id)} className="text-red-400 hover:text-red-300 text-xs">Deletar</button>
+          </div>
+        ])}
+      />
+    </div>
+  );
+}
+
+// ========== THEMES TAB (Updated to use API) ==========
+function ThemesTab({ token }: { token: string }) {
+  const [themes, setThemes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState({
+    name: '',
+    colors_json: JSON.stringify({
+      primary: '#0a4d3e',
+      secondary: '#0d5d4b',
+      accent: '#d4af37',
+      background: '#0a0e0f',
+      text: '#ffffff',
+      textSecondary: '#9ca3af',
+      success: '#10b981',
+      error: '#ef4444',
+      warning: '#f59e0b'
+    }, null, 2),
+    is_active: false
+  });
+
+  useEffect(() => {
+    fetchThemes();
+    loadActiveTheme();
+  }, []);
+
+  const loadActiveTheme = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/public/themes/active`);
+      if (res.ok) {
+        const theme = await res.json();
+        applyThemeToPage(theme.colors_json);
+      }
+    } catch (err) {
+      console.error('Erro ao carregar tema:', err);
+    }
+  };
+
+  const applyThemeToPage = (colorsJson: string) => {
+    try {
+      const colors = JSON.parse(colorsJson);
+      const root = document.documentElement;
+      root.style.setProperty('--color-primary', colors.primary);
+      root.style.setProperty('--color-secondary', colors.secondary);
+      root.style.setProperty('--color-accent', colors.accent);
+      root.style.setProperty('--color-background', colors.background);
+      root.style.setProperty('--color-text', colors.text);
+      root.style.setProperty('--color-text-secondary', colors.textSecondary);
+      root.style.setProperty('--color-success', colors.success);
+      root.style.setProperty('--color-error', colors.error);
+      root.style.setProperty('--color-warning', colors.warning);
+    } catch (err) {
+      console.error('Erro ao aplicar tema:', err);
+    }
+  };
+
+  const fetchThemes = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_URL}/api/admin/themes`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Falha ao carregar temas');
+      const data = await res.json();
+      setThemes(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+
+    try {
+      let res;
+      if (editingId) {
+        res = await fetch(`${API_URL}/api/admin/themes/${editingId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            name: form.name,
+            colors_json: form.colors_json,
+            is_active: form.is_active
+          })
+        });
+      } else {
+        res = await fetch(`${API_URL}/api/admin/themes`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(form)
+        });
+      }
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Erro ao salvar tema');
+      }
+
+      setSuccess(editingId ? 'Tema atualizado!' : 'Tema criado!');
+      resetForm();
+      fetchThemes();
+      // Aplicar tema se estiver ativo
+      if (form.is_active) {
+        applyThemeToPage(form.colors_json);
+        setTimeout(() => window.location.reload(), 1000);
+      }
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  const resetForm = () => {
+    setForm({
+      name: '',
+      colors_json: JSON.stringify({
+        primary: '#0a4d3e',
+        secondary: '#0d5d4b',
+        accent: '#d4af37',
+        background: '#0a0e0f',
+        text: '#ffffff',
+        textSecondary: '#9ca3af',
+        success: '#10b981',
+        error: '#ef4444',
+        warning: '#f59e0b'
+      }, null, 2),
+      is_active: false
+    });
+    setEditingId(null);
+  };
+
+  const loadForEdit = (theme: any) => {
+    setEditingId(theme.id);
+    setForm({
+      name: theme.name,
+      colors_json: theme.colors_json,
+      is_active: theme.is_active
+    });
+  };
+
+  const deleteTheme = async (id: number) => {
+    if (!confirm('Tem certeza que deseja deletar este tema?')) return;
+    try {
+      const res = await fetch(`${API_URL}/api/admin/themes/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Erro ao deletar');
+      fetchThemes();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  const activateTheme = async (id: number) => {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/themes/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ is_active: true })
+      });
+      if (!res.ok) throw new Error('Erro ao ativar tema');
+      fetchThemes();
+      // Aplicar tema imediatamente
+      const theme = themes.find(t => t.id === id);
+      if (theme) {
+        applyThemeToPage(theme.colors_json);
+      }
+      setTimeout(() => window.location.reload(), 1000);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold">Temas</h2>
+        <button onClick={fetchThemes} className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded">
+          <RefreshCw size={18} /> Atualizar
+        </button>
+      </div>
+
+      {error && <div className="bg-red-500/20 border border-red-500 rounded p-3 mb-4 text-red-400">{error}</div>}
+      {success && <div className="bg-green-500/20 border border-green-500 rounded p-3 mb-4 text-green-400">{success}</div>}
+
+      <div className="bg-gray-800 rounded-lg p-6 mb-6">
+        <h3 className="text-lg font-bold mb-4">{editingId ? 'Editar Tema' : 'Criar Novo Tema'}</h3>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Nome do Tema</label>
+            <input
+              type="text"
+              className="w-full bg-gray-700 rounded px-3 py-2 text-sm border border-gray-600 focus:border-[#d4af37] focus:outline-none"
+              value={form.name}
+              onChange={e => setForm({...form, name: e.target.value})}
+              required
+              placeholder="Ex: Tema Escuro"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Cores (JSON)</label>
+            <textarea
+              className="w-full bg-gray-700 rounded px-3 py-2 text-sm border border-gray-600 focus:border-[#d4af37] focus:outline-none font-mono"
+              value={form.colors_json}
+              onChange={e => setForm({...form, colors_json: e.target.value})}
+              required
+              rows={12}
+              placeholder='{"primary": "#0a4d3e", "secondary": "#0d5d4b", ...}'
+            />
+            <p className="text-xs text-gray-500 mt-1">Cores obrigatórias: primary, secondary, accent, background, text</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="is_active"
+              checked={form.is_active}
+              onChange={e => setForm({...form, is_active: e.target.checked})}
+              className="w-4 h-4"
+            />
+            <label htmlFor="is_active" className="text-sm text-gray-400">
+              Ativar este tema (desativa outros automaticamente)
+            </label>
+          </div>
+          <div className="flex gap-3">
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-4 py-2 bg-[#d4af37] hover:bg-[#ffd700] text-black font-semibold rounded disabled:opacity-50"
+            >
+              {editingId ? 'Atualizar' : 'Criar'}
+            </button>
+            {editingId && (
+              <button
+                type="button"
+                onClick={resetForm}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded"
+              >
+                Cancelar
+              </button>
+            )}
+          </div>
+        </form>
+      </div>
+
+      <TabTable
+        title="Lista de Temas"
+        loading={loading}
+        error={error}
+        onRefresh={fetchThemes}
+        columns={['ID', 'Nome', 'Ativo', 'Ações']}
+        rows={themes.map(t => [
+          t.id,
+          t.name,
+          t.is_active ? <span className="text-green-400">SIM</span> : <span className="text-gray-400">NÃO</span>,
+          <div key={t.id} className="flex gap-2">
+            {!t.is_active && (
+              <button onClick={() => activateTheme(t.id)} className="text-green-400 hover:text-green-300 text-xs">Ativar</button>
+            )}
+            <button onClick={() => loadForEdit(t)} className="text-blue-400 hover:text-blue-300 text-xs">Editar</button>
+            {!t.is_active && (
+              <button onClick={() => deleteTheme(t.id)} className="text-red-400 hover:text-red-300 text-xs">Deletar</button>
+            )}
+          </div>
+        ])}
+      />
     </div>
   );
 }
