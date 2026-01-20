@@ -2185,7 +2185,7 @@ function ThemesTab({ token }: { token: string }) {
     }
   };
 
-  const ColorInput = ({ label, value, onChange, colorName }: { label: string; value: string; onChange: (v: string) => void; colorName: string }) => {
+  const ColorInput = ({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) => {
     return (
       <div>
         <label className="block text-sm text-gray-400 mb-1">{label}</label>
