@@ -7,7 +7,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export default function AffiliatePanel() {
   const navigate = useNavigate();
-  const { user, token } = useAuth();
+  const { token } = useAuth();
   const [affiliate, setAffiliate] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');

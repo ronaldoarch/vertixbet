@@ -8,8 +8,6 @@ import {
   ChevronUp, ChevronDown, Percent, FileText, 
   Gift, ShoppingBag, Tag, Gamepad2, UserCog, Palette
 } from 'lucide-react';
-import type { ThemePalette } from '../utils/themeManager';
-import { applyThemeToDocument, getThemeList, saveThemeList, setActiveTheme } from '../utils/themeManager';
 import { useTheme } from '../contexts/ThemeContext';
 
 interface Stats {
@@ -49,7 +47,7 @@ interface Stats {
 // Backend FastAPI - usa variável de ambiente ou fallback para localhost
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-const makeId = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(16).slice(2));
+// const makeId = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(16).slice(2));
 
 export default function Admin() {
   const navigate = useNavigate();
@@ -2256,20 +2254,6 @@ function ThemesTab({ token }: { token: string }) {
       />
     </div>
   );
-}
-
-function ColorInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  return (
-    <label className="text-sm text-gray-300 flex items-center gap-2">
-      <span className="w-28">{label}</span>
-      <input type="color" value={value} onChange={(e) => onChange(e.target.value)} className="h-10 w-16 border border-gray-600 rounded bg-gray-700" />
-      <input value={value} onChange={(e) => onChange(e.target.value)} className="flex-1 bg-gray-700 rounded px-2 py-1 text-xs" />
-    </label>
-  );
-}
-
-function Swatch({ color }: { color: string }) {
-  return <span className="w-6 h-6 rounded border border-gray-600" style={{ background: color }} />;
 }
 
 // Table helper
