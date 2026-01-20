@@ -5,10 +5,11 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from typing import Optional
 from database import get_db
-from models import User, Deposit, Withdrawal, Gateway, TransactionStatus
+from models import User, Deposit, Withdrawal, Gateway, TransactionStatus, Bet, BetStatus
 from suitpay_api import SuitPayAPI
 from schemas import DepositResponse, WithdrawalResponse, DepositPixRequest, WithdrawalPixRequest
 from dependencies import get_current_user
+from igamewin_api import get_igamewin_api
 from datetime import datetime, timedelta
 import json
 import uuid
@@ -392,4 +393,92 @@ async def webhook_pix_cashout(request: Request, db: Session = Depends(get_db)):
     
     except Exception as e:
         print(f"Erro ao processar webhook PIX Cash-out: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao processar webhook: {str(e)}")
+
+
+@webhook_router.post("/igamewin/bet")
+async def webhook_igamewin_bet(request: Request, db: Session = Depends(get_db)):
+    """
+    Webhook para receber notificações de apostas do IGameWin
+    Processa apostas e atualiza saldo do jogador
+    
+    Campos esperados do IGameWin:
+    - user_code: Código do usuário
+    - game_code: Código do jogo
+    - bet_amount: Valor da aposta
+    - win_amount: Valor ganho (0 se perdeu)
+    - transaction_id: ID único da transação
+    - status: Status da aposta (win/lose)
+    """
+    try:
+        data = await request.json()
+        
+        # Extrair dados do webhook
+        user_code = data.get("user_code") or data.get("userCode")
+        game_code = data.get("game_code") or data.get("gameCode")
+        bet_amount = float(data.get("bet_amount") or data.get("betAmount") or 0)
+        win_amount = float(data.get("win_amount") or data.get("winAmount") or 0)
+        transaction_id = data.get("transaction_id") or data.get("transactionId")
+        status = data.get("status", "").lower()
+        
+        if not user_code or not transaction_id:
+            return {"status": "error", "message": "user_code e transaction_id são obrigatórios"}
+        
+        # Buscar usuário pelo username (user_code)
+        user = db.query(User).filter(User.username == user_code).first()
+        if not user:
+            return {"status": "error", "message": f"Usuário {user_code} não encontrado"}
+        
+        # Verificar se a aposta já foi processada
+        existing_bet = db.query(Bet).filter(Bet.transaction_id == transaction_id).first()
+        if existing_bet:
+            return {"status": "ok", "message": "Aposta já processada"}
+        
+        # Criar registro de aposta
+        bet_status = BetStatus.WON if status == "win" else BetStatus.LOST
+        if win_amount == 0:
+            bet_status = BetStatus.LOST
+        
+        bet = Bet(
+            user_id=user.id,
+            game_id=game_code,
+            game_name=data.get("game_name") or data.get("gameName") or "Unknown",
+            provider="IGameWin",
+            amount=bet_amount,
+            win_amount=win_amount,
+            status=bet_status,
+            transaction_id=transaction_id,
+            external_id=transaction_id,
+            metadata_json=json.dumps(data)
+        )
+        
+        db.add(bet)
+        
+        # Atualizar saldo do jogador
+        # Debitar valor da aposta
+        user.balance -= bet_amount
+        
+        # Se ganhou, creditar valor ganho
+        if win_amount > 0:
+            user.balance += win_amount
+        
+        # Sincronizar saldo com IGameWin
+        api = get_igamewin_api(db)
+        if api:
+            # Obter saldo atual do IGameWin
+            igamewin_balance = await api.get_user_balance(user_code)
+            if igamewin_balance is not None:
+                # Sincronizar: se o saldo do IGameWin for diferente, ajustar
+                if abs(igamewin_balance - user.balance) > 0.01:  # Tolerância de 1 centavo
+                    user.balance = igamewin_balance
+        
+        db.commit()
+        db.refresh(bet)
+        
+        return {"status": "ok", "message": "Aposta processada com sucesso", "bet_id": bet.id}
+    
+    except Exception as e:
+        print(f"Erro ao processar webhook IGameWin bet: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Erro ao processar webhook: {str(e)}")

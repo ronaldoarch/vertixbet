@@ -724,6 +724,46 @@ async def launch_game(
             detail="provider_code é obrigatório. Não foi possível determinar o provider do jogo."
         )
     
+    # IMPORTANTE: Sincronizar saldo do jogador com IGameWin antes de lançar o jogo
+    # Verificar saldo atual no IGameWin
+    igamewin_balance = await api.get_user_balance(current_user.username)
+    
+    # Se o usuário não existe no IGameWin ou tem saldo diferente, sincronizar
+    if igamewin_balance is None:
+        # Usuário não existe no IGameWin, criar e transferir saldo
+        user_created = await api.create_user(current_user.username, is_demo=False)
+        if not user_created:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Erro ao criar usuário no IGameWin. {api.last_error or 'Erro desconhecido'}"
+            )
+        # Transferir todo o saldo do jogador para o IGameWin
+        if current_user.balance > 0:
+            transfer_result = await api.transfer_in(current_user.username, current_user.balance)
+            if not transfer_result:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Erro ao transferir saldo para IGameWin. {api.last_error or 'Erro desconhecido'}"
+                )
+    elif igamewin_balance != current_user.balance:
+        # Saldos diferentes, sincronizar
+        balance_diff = current_user.balance - igamewin_balance
+        if balance_diff > 0:
+            # Saldo local maior, transferir diferença para IGameWin
+            transfer_result = await api.transfer_in(current_user.username, balance_diff)
+            if not transfer_result:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Erro ao transferir saldo para IGameWin. {api.last_error or 'Erro desconhecido'}"
+                )
+        elif balance_diff < 0:
+            # Saldo IGameWin maior, transferir diferença de volta (caso o jogador tenha ganhado)
+            transfer_result = await api.transfer_out(current_user.username, abs(balance_diff))
+            if transfer_result:
+                # Atualizar saldo local
+                current_user.balance = igamewin_balance
+                db.commit()
+    
     # Gerar URL de lançamento do jogo usando user_code (username)
     launch_url = await api.launch_game(
         user_code=current_user.username,
