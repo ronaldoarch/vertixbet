@@ -38,13 +38,15 @@ Valor: 147.93.147.33
 TTL: 3600
 ```
 
-#### Registro 3: API (Se usar subdomínio separado)
+#### Registro 3: API (OBRIGATÓRIO - Coolify não permite mesmo domínio para duas apps)
 ```
 Tipo: A
 Nome: api
 Valor: 147.93.147.33
 TTL: 3600
 ```
+
+**⚠️ IMPORTANTE:** Este registro é **obrigatório** porque o Coolify não permite usar o mesmo domínio para backend e frontend. Você precisa usar subdomínios diferentes.
 
 ---
 
@@ -100,38 +102,60 @@ nslookup vertixbet.site
 
 ## 🔐 Próximos Passos (Após DNS Propagar)
 
-### 1. Adicionar Domínio no Coolify
+### ⚠️ IMPORTANTE: Coolify não permite mesmo domínio para duas aplicações
+
+O Coolify **não permite** usar o mesmo domínio (`vertixbet.site`) para duas aplicações diferentes. Você precisa usar **subdomínios diferentes**.
+
+---
+
+### Opção Recomendada: Usar Subdomínios Separados
+
+#### 1. Adicionar Domínios no Coolify
 
 **Backend:**
 1. No Coolify, abra a aplicação **Backend**
 2. Vá em **Domains** → **Add Domain**
-3. Adicione: `vertixbet.site` (ou `api.vertixbet.site` se usar subdomínio)
+3. Adicione: `api.vertixbet.site` ✅
 
 **Frontend:**
 1. No Coolify, abra a aplicação **Frontend**
 2. Vá em **Domains** → **Add Domain**
-3. Adicione: `vertixbet.site` e `www.vertixbet.site` (opcional)
+3. Adicione: `vertixbet.site` e `www.vertixbet.site` (opcional) ✅
 
-### 2. SSL Será Gerado Automaticamente
+#### 2. Configurar DNS para Subdomínios
+
+Na Hostinger, adicione também o registro para o subdomínio `api`:
+
+```
+Tipo: A
+Nome: api
+Valor: 147.93.147.33
+TTL: 3600
+```
+
+#### 3. SSL Será Gerado Automaticamente
 
 O Coolify configurará SSL via Let's Encrypt automaticamente após detectar o DNS correto.
 
-### 3. Atualizar Variáveis de Ambiente
+#### 4. Atualizar Variáveis de Ambiente
 
 **Backend - CORS_ORIGINS:**
 ```env
-CORS_ORIGINS=https://vertixbet.site,https://www.vertixbet.site
+CORS_ORIGINS=https://vertixbet.site,https://www.vertixbet.site,https://api.vertixbet.site
 ```
 
 **Frontend - VITE_API_URL:**
 ```env
-VITE_API_URL=https://vertixbet.site/api
-```
-
-Ou se usar subdomínio separado:
-```env
 VITE_API_URL=https://api.vertixbet.site
 ```
+
+---
+
+### Resultado Final
+
+- **Frontend:** `https://vertixbet.site`
+- **Backend:** `https://api.vertixbet.site`
+- **API Endpoints:** `https://api.vertixbet.site/api/...`
 
 ### 4. Fazer Redeploy
 
@@ -141,9 +165,15 @@ Após alterar variáveis de ambiente, faça **Redeploy** das aplicações no Coo
 
 ## ⚠️ Observações Importantes
 
-1. **Renovação Automática:** Considere ativar a renovação automática do domínio para evitar perda do domínio
-2. **Nameservers:** Não precisa alterar os nameservers (`dns-parking.com`). Você pode gerenciar DNS diretamente na Hostinger
-3. **Hosting na Hostinger:** Se houver serviço de hosting ativo na Hostinger, desative-o para evitar conflitos com o Coolify
+1. **Coolify não permite mesmo domínio:** O Coolify **não permite** usar o mesmo domínio (`vertixbet.site`) para duas aplicações. Use subdomínios diferentes:
+   - Frontend: `vertixbet.site`
+   - Backend: `api.vertixbet.site`
+
+2. **Renovação Automática:** Considere ativar a renovação automática do domínio para evitar perda do domínio
+
+3. **Nameservers:** Não precisa alterar os nameservers (`dns-parking.com`). Você pode gerenciar DNS diretamente na Hostinger
+
+4. **Hosting na Hostinger:** Se houver serviço de hosting ativo na Hostinger, desative-o para evitar conflitos com o Coolify
 
 ---
 
@@ -171,11 +201,11 @@ Após alterar variáveis de ambiente, faça **Redeploy** das aplicações no Coo
 - [ ] Cliquei em "Editar"
 - [ ] Adicionei registro A para `@` com IP `147.93.147.33`
 - [ ] Adicionei registro A para `www` com IP `147.93.147.33` (opcional)
-- [ ] Adicionei registro A para `api` com IP `147.93.147.33` (se usar subdomínio)
+- [ ] Adicionei registro A para `api` com IP `147.93.147.33` (OBRIGATÓRIO)
 - [ ] Salvei as alterações
 - [ ] Verifiquei propagação DNS em dnschecker.org
-- [ ] Adicionei domínio no Coolify (Backend)
-- [ ] Adicionei domínio no Coolify (Frontend)
+- [ ] Adicionei domínio `api.vertixbet.site` no Coolify (Backend)
+- [ ] Adicionei domínio `vertixbet.site` no Coolify (Frontend)
 - [ ] Atualizei variáveis de ambiente (CORS_ORIGINS e VITE_API_URL)
 - [ ] Fiz redeploy das aplicações
 - [ ] SSL está funcionando (cadeado verde no navegador)
