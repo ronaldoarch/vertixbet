@@ -12,7 +12,11 @@ export default defineConfig({
     allowedHosts: [
       'localhost',
       '.agenciamidas.com',
-      '.localhost'
+      '.localhost',
+      'vertixbet.site',
+      'www.vertixbet.site',
+      'api.vertixbet.site',
+      '.vertixbet.site'
     ]
   },
   server: {
