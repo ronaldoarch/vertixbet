@@ -2774,7 +2774,6 @@ function NotificationsTab({ token }: { token: string }) {
 }
 
 function ProviderOrderSection({ token, providers, loadingGames }: { token: string; providers: any[]; loadingGames: boolean }) {
-  const [orders, setOrders] = useState<any[]>([]);
   const [sortedProviders, setSortedProviders] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -2789,7 +2788,6 @@ function ProviderOrderSection({ token, providers, loadingGames }: { token: strin
       });
       if (!res.ok) throw new Error('Falha ao carregar ordens');
       const ordersData = await res.json();
-      setOrders(ordersData);
       
       // Ordenar provedores baseado nas ordens
       const providerOrders = providers.map((p) => {
