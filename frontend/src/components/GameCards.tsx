@@ -8,9 +8,6 @@ interface GameCard {
 
 export default function GameCards() {
   const games: GameCard[] = [
-    { id: '1', title: 'Baixar Aplicativo', tag: 'GRÁTIS', tagColor: 'green' },
-    { id: '2', title: 'Cashback de até 25%', tag: 'DEPOSITE', tagColor: 'green' },
-    { id: '4', title: 'Cupom De Bônus', tag: 'GRÁTIS', tagColor: 'green' },
     { id: '5', title: 'Aviator Spribe', tag: 'HOT', tagColor: 'red' },
     { id: '8', title: 'Cachorro Sortudo', tag: 'NEW', tagColor: 'yellow' },
     { id: '9', title: 'Roleta Ao Vivo' },
@@ -44,15 +41,12 @@ export default function GameCards() {
       <div className="container mx-auto">
         <div className="flex gap-5 overflow-x-auto pb-5 scrollbar-hide scroll-smooth">
           {games.map((game) => {
-            // Determinar se é um jogo real ou ação especial
-            const isSpecialAction = ['1', '2', '4'].includes(game.id);
             const gameSlug = game.title.toLowerCase().replace(/\s+/g, '-');
             
             return (
             <a
               key={game.id}
-              href={isSpecialAction ? '#' : `/jogo/${gameSlug}`}
-              onClick={isSpecialAction ? (e) => e.preventDefault() : undefined}
+              href={`/jogo/${gameSlug}`}
               className="flex-shrink-0 w-36 h-36 bg-gradient-to-br from-gray-800/90 via-gray-900/90 to-gray-950/90 backdrop-blur-sm rounded-2xl p-5 flex flex-col items-center justify-center cursor-pointer hover:scale-110 hover:-translate-y-2 transition-all duration-300 relative border border-gray-700/50 hover:border-[#d4af37]/50 hover:shadow-2xl hover:shadow-[#d4af37]/20 group"
             >
               {/* Efeito de brilho no hover */}

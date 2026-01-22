@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import PromoBanner from './components/PromoBanner';
 import Header from './components/Header';
 import HeroBanner from './components/HeroBanner';
 import SearchBar from './components/SearchBar';
@@ -60,7 +59,6 @@ function App() {
 
   return (
     <div className="min-h-screen bg-[#0a0e0f] text-white">
-      <PromoBanner />
       <Header 
         onMenuClick={() => setSidebarOpen(true)}
         onLoginClick={() => {
