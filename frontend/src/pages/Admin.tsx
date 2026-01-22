@@ -127,7 +127,7 @@ export default function Admin() {
             >
               {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
-            <h1 className="text-xl font-bold">Fortune Vegas Admin</h1>
+            <h1 className="text-xl font-bold">VertixBet Admin</h1>
           </div>
           <button
             onClick={handleLogout}

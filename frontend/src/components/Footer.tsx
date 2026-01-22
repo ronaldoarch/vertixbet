@@ -1,4 +1,32 @@
+import { useEffect, useState } from 'react';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 export default function Footer() {
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchLogo = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/public/media/logo`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.url) {
+            const url = data.url.startsWith('/api') 
+              ? `${API_URL}${data.url}`
+              : `${API_URL}/api/public/media${data.url}`;
+            setLogoUrl(url);
+          } else {
+            setLogoUrl(null);
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao buscar logo:', err);
+      }
+    };
+    fetchLogo();
+  }, []);
+
   return (
     <footer className="w-full bg-[#0a0e0f] border-t border-gray-800 py-6 md:py-8 px-4 mt-8 md:mt-12">
       <div className="container mx-auto">
@@ -61,9 +89,13 @@ export default function Footer() {
           <div className="col-span-2 md:col-span-1">
             <h3 className="text-white font-bold mb-3 md:mb-4 text-base md:text-lg">Certificações</h3>
             <div className="flex flex-col gap-3 md:gap-4">
-              <div className="w-20 h-20 md:w-24 md:h-24 bg-gray-800 rounded flex items-center justify-center">
-                <span className="text-gray-400 text-xs text-center">Logo</span>
-              </div>
+              {logoUrl ? (
+                <img src={logoUrl} alt="VertixBet" className="w-20 h-20 md:w-24 md:h-24 object-contain" />
+              ) : (
+                <div className="w-20 h-20 md:w-24 md:h-24 bg-gray-800 rounded flex items-center justify-center">
+                  <span className="text-gray-400 text-xs text-center">Logo</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -88,7 +120,7 @@ export default function Footer() {
             </div>
           </div>
           <p className="text-gray-500 text-[10px] md:text-xs text-center">
-            © {new Date().getFullYear()} Fortune Vegas. Todos os direitos reservados.
+            © {new Date().getFullYear()} VertixBet. Todos os direitos reservados.
           </p>
         </div>
       </div>

@@ -1,6 +1,6 @@
-# 📦 Guia de Deploy no Coolify - Fortune Vegas Backend
+# 📦 Guia de Deploy no Coolify - VertixBet Backend
 
-Este guia explica como configurar o deploy do backend Fortune Vegas no Coolify.
+Este guia explica como configurar o deploy do backend VertixBet no Coolify.
 
 ## 📋 Pré-requisitos
 

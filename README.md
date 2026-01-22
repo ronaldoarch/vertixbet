@@ -1,4 +1,4 @@
-# Fortune Vegas - Plataforma de Cassino e Apostas Esportivas
+# VertixBet - Plataforma de Cassino e Apostas Esportivas
 
 Front-end recriado - Uma plataforma moderna de cassino e apostas esportivas.
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 // Backend FastAPI - usa variável de ambiente ou fallback para localhost
@@ -10,6 +10,29 @@ export default function AdminLogin() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchLogo = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/public/media/logo`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.url) {
+            const url = data.url.startsWith('/api') 
+              ? `${API_URL}${data.url}`
+              : `${API_URL}/api/public/media${data.url}`;
+            setLogoUrl(url);
+          } else {
+            setLogoUrl(null);
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao buscar logo:', err);
+      }
+    };
+    fetchLogo();
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,9 +67,15 @@ export default function AdminLogin() {
     <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
       <div className="bg-gray-800 rounded-2xl border border-gray-700 w-full max-w-md p-8">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-black text-white mb-2">
-            FORTUNE <span className="text-[#d4af37]">VEGAS</span>
-          </h1>
+          {logoUrl ? (
+            <div className="flex justify-center mb-4">
+              <img src={logoUrl} alt="VertixBet" className="w-32 h-32 object-contain" />
+            </div>
+          ) : (
+            <h1 className="text-3xl font-black text-white mb-2">
+              VERTIX<span className="text-[#d4af37]">BET</span>
+            </h1>
+          )}
           <p className="text-gray-400">Painel Administrativo</p>
         </div>
 

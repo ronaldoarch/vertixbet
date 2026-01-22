@@ -1,4 +1,4 @@
-# 🚀 Guia de Deploy - Fortune Vegas no Coolify
+# 🚀 Guia de Deploy - VertixBet no Coolify
 
 ## 📋 Visão Geral
 

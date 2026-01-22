@@ -8,7 +8,7 @@ import os
 # Import routes
 from routes import auth, admin, media, payments
 
-app = FastAPI(title="Fortune Vegas API", version="1.0.0")
+app = FastAPI(title="VertixBet API", version="1.0.0")
 
 # Configurar CORS - permite variáveis de ambiente para produção
 cors_origins_env = os.getenv("CORS_ORIGINS", "").strip()
@@ -62,7 +62,7 @@ async def startup_event():
 
 @app.get("/")
 async def root():
-    return {"message": "Fortune Vegas API", "status": "ok", "version": "1.0.0"}
+    return {"message": "VertixBet API", "status": "ok", "version": "1.0.0"}
 
 
 @app.get("/api/health")

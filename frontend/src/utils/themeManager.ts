@@ -24,7 +24,7 @@ const BRAND_STYLE_ID = 'fv-brand-style';
 
 const defaultTheme: ThemePalette = {
   id: 'default',
-  name: 'Padrão Fortune',
+  name: 'Padrão VertixBet',
   bg: '#0a0e0f',
   surface: '#0d1415',
   card: '#0f1b1d',

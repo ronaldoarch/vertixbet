@@ -1,6 +1,6 @@
-# Backend Fortune Vegas - FastAPI
+# Backend VertixBet - FastAPI
 
-Backend Python para a plataforma Fortune Vegas com integração IGameWin.
+Backend Python para a plataforma VertixBet com integração IGameWin.
 
 ## Instalação
 

@@ -1,4 +1,4 @@
-# 🚀 Guia Rápido: Configuração do Coolify para Fortune Vegas
+# 🚀 Guia Rápido: Configuração do Coolify para VertixBet
 
 ## 📋 Checklist de Configuração
 
