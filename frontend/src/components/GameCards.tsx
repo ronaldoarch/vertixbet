@@ -50,30 +50,28 @@ export default function GameCards() {
         }));
 
         // Filtrar e mapear os jogos destacados
-        const featuredGames: GameCard[] = featuredGamesConfig
-          .map((config) => {
-            // Buscar jogo que corresponde ao título (busca parcial, case-insensitive)
-            const normalizedConfigTitle = config.title.toLowerCase().trim();
-            const matchedGame = allGames.find((g) => {
-              const normalizedGameTitle = g.title.toLowerCase().trim();
-              return normalizedGameTitle.includes(normalizedConfigTitle) || 
-                     normalizedConfigTitle.includes(normalizedGameTitle);
-            });
+        const featuredGames: GameCard[] = [];
+        for (const config of featuredGamesConfig) {
+          // Buscar jogo que corresponde ao título (busca parcial, case-insensitive)
+          const normalizedConfigTitle = config.title.toLowerCase().trim();
+          const matchedGame = allGames.find((g) => {
+            const normalizedGameTitle = g.title.toLowerCase().trim();
+            return normalizedGameTitle.includes(normalizedConfigTitle) || 
+                   normalizedConfigTitle.includes(normalizedGameTitle);
+          });
 
-            if (matchedGame) {
-              return {
-                id: matchedGame.id,
-                title: matchedGame.title,
-                code: matchedGame.code,
-                banner: matchedGame.banner,
-                provider: matchedGame.provider,
-                tag: config.tag,
-                tagColor: config.tagColor,
-              } as GameCard;
-            }
-            return null;
-          })
-          .filter((g): g is GameCard => g !== null);
+          if (matchedGame) {
+            featuredGames.push({
+              id: matchedGame.id,
+              title: matchedGame.title,
+              code: matchedGame.code,
+              banner: matchedGame.banner,
+              provider: matchedGame.provider,
+              tag: config.tag,
+              tagColor: config.tagColor,
+            });
+          }
+        }
 
         setGames(featuredGames);
       } catch (err) {
