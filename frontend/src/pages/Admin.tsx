@@ -1176,39 +1176,7 @@ function IGameWinTab({ token }: { token: string }) {
 
   // Preencher formulário quando houver um agente existente
   useEffect(() => {
-    if (items.length > 0) {
-      // Priorizar agente ativo, senão usar o primeiro
-      const agent = items.find(a => a.is_active) || items[0];
-      const newForm = {
-        agent_code: agent.agent_code || '',
-        agent_key: agent.agent_key || '',
-        api_url: agent.api_url || 'https://api.igamewin.com',
-        credentials: agent.credentials || '',
-        is_active: agent.is_active !== undefined ? agent.is_active : true
-      };
-      
-      // Atualizar formulário sempre que os dados do agente mudarem
-      setForm(newForm);
-      
-      // Só buscar jogos e saldo se o agente estiver ativo e tiver credenciais válidas
-      if (agent.is_active && agent.agent_code && agent.agent_key && 
-          agent.agent_code.trim() !== '' && agent.agent_key.trim() !== '' &&
-          !agent.agent_code.includes('http') && !agent.agent_key.includes('http')) {
-        // Usar um pequeno delay para evitar chamadas múltiplas
-        const timer = setTimeout(() => {
-          fetchGames(); 
-          fetchAgentBalance();
-        }, 300);
-        return () => clearTimeout(timer);
-      } else {
-        // Limpar dados se o agente não estiver válido
-        setGames([]);
-        setProviders([]);
-        setAgentBalance(null);
-        setBalanceError('');
-        setGamesError('Nenhum agente IGameWin ativo configurado ou credenciais incompletas (agent_code/agent_key vazios ou inválidos)');
-      }
-    } else {
+    if (items.length === 0) {
       // Se não há agentes, limpar formulário
       setForm({ agent_code: '', agent_key: '', api_url: 'https://api.igamewin.com', credentials: '', is_active: true });
       setGames([]);
@@ -1216,8 +1184,51 @@ function IGameWinTab({ token }: { token: string }) {
       setAgentBalance(null);
       setBalanceError('');
       setGamesError('Nenhum agente configurado. Configure um agente IGameWin primeiro.');
+      return;
     }
-  }, [items]); // Mudado para items em vez de items.length para detectar mudanças nos dados
+
+    // Priorizar agente ativo, senão usar o primeiro
+    const agent = items.find(a => a.is_active) || items[0];
+    
+    // Criar uma chave única para o agente atual
+    const agentKey = `${agent.id}-${agent.agent_code || ''}-${agent.agent_key || ''}-${agent.is_active}`;
+    
+    // Verificar se o formulário já está atualizado com este agente
+    const currentFormKey = `${form.agent_code}-${form.agent_key}-${form.is_active}`;
+    const agentFormKey = `${agent.agent_code || ''}-${agent.agent_key || ''}-${agent.is_active}`;
+    
+    // Só atualizar o formulário se os dados mudaram
+    if (currentFormKey !== agentFormKey) {
+      const newForm = {
+        agent_code: agent.agent_code || '',
+        agent_key: agent.agent_key || '',
+        api_url: agent.api_url || 'https://api.igamewin.com',
+        credentials: agent.credentials || '',
+        is_active: agent.is_active !== undefined ? agent.is_active : true
+      };
+      setForm(newForm);
+    }
+    
+    // Só buscar jogos e saldo se o agente estiver ativo e tiver credenciais válidas
+    if (agent.is_active && agent.agent_code && agent.agent_key && 
+        agent.agent_code.trim() !== '' && agent.agent_key.trim() !== '' &&
+        !agent.agent_code.includes('http') && !agent.agent_key.includes('http')) {
+      // Usar um pequeno delay para evitar chamadas múltiplas
+      const timer = setTimeout(() => {
+        fetchGames(); 
+        fetchAgentBalance();
+      }, 500);
+      return () => clearTimeout(timer);
+    } else {
+      // Limpar dados se o agente não estiver válido
+      setGames([]);
+      setProviders([]);
+      setAgentBalance(null);
+      setBalanceError('');
+      setGamesError('Nenhum agente IGameWin ativo configurado ou credenciais incompletas (agent_code/agent_key vazios ou inválidos)');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.length, JSON.stringify(items.map(a => ({ id: a.id, agent_code: a.agent_code, agent_key: a.agent_key, is_active: a.is_active })))]);
 
   return (
     <div className="space-y-4">
