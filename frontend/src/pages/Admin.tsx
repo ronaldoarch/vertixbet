@@ -1113,17 +1113,31 @@ function IGameWinTab({ token }: { token: string }) {
     setLoading(true); setError('');
     const body = JSON.stringify(form);
     try {
-      // Se já existe um agente, fazer update em vez de criar
-        const existingId = items[0]?.id;
+      // Encontrar o agente que corresponde ao agent_code do formulário, ou o primeiro agente
+      let existingId = null;
+      
+      // Se o formulário tem um agent_code, tentar encontrar o agente correspondente
+      if (form.agent_code && form.agent_code.trim() !== '') {
+        const matchingAgent = items.find(a => a.agent_code === form.agent_code.trim());
+        if (matchingAgent) {
+          existingId = matchingAgent.id;
+        }
+      }
+      
+      // Se não encontrou pelo agent_code, usar o primeiro agente (para atualizar)
+      if (!existingId && items.length > 0) {
+        existingId = items[0].id;
+      }
+      
       let res;
       
       if (existingId) {
         // Fazer update do agente existente
-          res = await fetch(`${API_URL}/api/admin/igamewin-agents/${existingId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body
-          });
+        res = await fetch(`${API_URL}/api/admin/igamewin-agents/${existingId}`, {
+          method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body
+      });
       } else {
         // Criar novo agente apenas se não existir nenhum
         res = await fetch(`${API_URL}/api/admin/igamewin-agents`, {
@@ -1285,15 +1299,31 @@ function IGameWinTab({ token }: { token: string }) {
 
       <div className="grid gap-3">
         {items.length > 0 && (() => {
-          // Mostrar apenas o primeiro agente (ou o agente ativo se houver)
-          const activeAgent = items.find(a => a.is_active) || items[0];
+          // Mostrar o agente que corresponde ao formulário, ou o agente ativo, ou o primeiro
+          let displayAgent = null;
+          
+          // Primeiro, tentar encontrar o agente que corresponde ao agent_code do formulário
+          if (form.agent_code && form.agent_code.trim() !== '') {
+            displayAgent = items.find(a => a.agent_code === form.agent_code.trim());
+          }
+          
+          // Se não encontrou, usar o agente ativo
+          if (!displayAgent) {
+            displayAgent = items.find(a => a.is_active);
+          }
+          
+          // Se ainda não encontrou, usar o primeiro
+          if (!displayAgent) {
+            displayAgent = items[0];
+          }
+          
           return (
-            <div key={activeAgent.id} className="p-4 rounded border border-gray-700 bg-gray-800/50">
-              <div className="font-bold text-lg">{activeAgent.agent_code || 'Sem código'}</div>
-              <div className="text-sm text-gray-400">API: {activeAgent.api_url}</div>
-              <div className="text-sm text-gray-400">Status: {activeAgent.is_active ? 'Ativo' : 'Inativo'}</div>
-              {activeAgent.credentials && (
-                <div className="text-xs text-gray-500 break-all mt-1">Credenciais: {activeAgent.credentials}</div>
+            <div key={displayAgent.id} className="p-4 rounded border border-gray-700 bg-gray-800/50">
+              <div className="font-bold text-lg">{displayAgent.agent_code || 'Sem código'}</div>
+              <div className="text-sm text-gray-400">API: {displayAgent.api_url}</div>
+              <div className="text-sm text-gray-400">Status: {displayAgent.is_active ? 'Ativo' : 'Inativo'}</div>
+              {displayAgent.credentials && (
+                <div className="text-xs text-gray-500 break-all mt-1">Credenciais: {displayAgent.credentials}</div>
               )}
               {items.length > 1 && (
                 <div className="text-xs text-yellow-400 mt-2">
