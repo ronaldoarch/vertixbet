@@ -1196,25 +1196,17 @@ function IGameWinTab({ token }: { token: string }) {
           !agent.agent_code.includes('http') && !agent.agent_key.includes('http')) {
         // Usar um pequeno delay para evitar chamadas múltiplas
         const timer = setTimeout(() => {
-          console.log('Buscando jogos e saldo para agente:', agent.agent_code);
           fetchGames(); 
           fetchAgentBalance();
         }, 300);
         return () => clearTimeout(timer);
       } else {
         // Limpar dados se o agente não estiver válido
-        console.log('Agente inválido - não buscando jogos/saldo:', {
-          is_active: agent.is_active,
-          has_code: !!agent.agent_code,
-          has_key: !!agent.agent_key,
-          code: agent.agent_code,
-          key: agent.agent_key
-        });
         setGames([]);
         setProviders([]);
         setAgentBalance(null);
         setBalanceError('');
-        setGamesError('Nenhum agente IGameWin ativo configurado ou credenciais incompletas (agent_code/agent_key vazios)');
+        setGamesError('Nenhum agente IGameWin ativo configurado ou credenciais incompletas (agent_code/agent_key vazios ou inválidos)');
       }
     } else {
       // Se não há agentes, limpar formulário
