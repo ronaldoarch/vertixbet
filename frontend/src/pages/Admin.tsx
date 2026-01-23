@@ -1040,12 +1040,13 @@ function IGameWinTab({ token }: { token: string }) {
   };
 
   const fetchGames = async (provider?: string) => {
-    // Validar se há credenciais antes de fazer a chamada
-    const currentAgent = items[0];
-    if (!currentAgent || !currentAgent.is_active || 
-        !currentAgent.agent_code || !currentAgent.agent_key ||
-        currentAgent.agent_code.trim() === '' || currentAgent.agent_key.trim() === '') {
-      setGamesError('Nenhum agente IGameWin ativo configurado ou credenciais incompletas (agent_code/agent_key vazios)');
+    // Validar se há credenciais antes de fazer a chamada - usar agente ativo
+    const activeAgent = items.find(a => a.is_active) || items[0];
+    if (!activeAgent || !activeAgent.is_active || 
+        !activeAgent.agent_code || !activeAgent.agent_key ||
+        activeAgent.agent_code.trim() === '' || activeAgent.agent_key.trim() === '' ||
+        activeAgent.agent_code.includes('http') || activeAgent.agent_key.includes('http')) {
+      setGamesError('Nenhum agente IGameWin ativo configurado ou credenciais incompletas (agent_code/agent_key vazios ou inválidos)');
       setGames([]);
       setProviders([]);
       return;
@@ -1081,12 +1082,13 @@ function IGameWinTab({ token }: { token: string }) {
   };
 
   const fetchAgentBalance = async () => {
-    // Validar se há credenciais antes de fazer a chamada
-    const currentAgent = items[0];
-    if (!currentAgent || !currentAgent.is_active || 
-        !currentAgent.agent_code || !currentAgent.agent_key ||
-        currentAgent.agent_code.trim() === '' || currentAgent.agent_key.trim() === '') {
-      setBalanceError('Nenhum agente IGameWin ativo configurado ou credenciais incompletas (agent_code/agent_key vazios)');
+    // Validar se há credenciais antes de fazer a chamada - usar agente ativo
+    const activeAgent = items.find(a => a.is_active) || items[0];
+    if (!activeAgent || !activeAgent.is_active || 
+        !activeAgent.agent_code || !activeAgent.agent_key ||
+        activeAgent.agent_code.trim() === '' || activeAgent.agent_key.trim() === '' ||
+        activeAgent.agent_code.includes('http') || activeAgent.agent_key.includes('http')) {
+      setBalanceError('Nenhum agente IGameWin ativo configurado ou credenciais incompletas (agent_code/agent_key vazios ou inválidos)');
       setAgentBalance(null);
       return;
     }
@@ -1174,8 +1176,9 @@ function IGameWinTab({ token }: { token: string }) {
 
   // Preencher formulário quando houver um agente existente
   useEffect(() => {
-    if (items.length > 0 && items[0]) {
-      const agent = items[0];
+    if (items.length > 0) {
+      // Priorizar agente ativo, senão usar o primeiro
+      const agent = items.find(a => a.is_active) || items[0];
       const newForm = {
         agent_code: agent.agent_code || '',
         agent_key: agent.agent_key || '',
@@ -1189,20 +1192,29 @@ function IGameWinTab({ token }: { token: string }) {
       
       // Só buscar jogos e saldo se o agente estiver ativo e tiver credenciais válidas
       if (agent.is_active && agent.agent_code && agent.agent_key && 
-          agent.agent_code.trim() !== '' && agent.agent_key.trim() !== '') {
+          agent.agent_code.trim() !== '' && agent.agent_key.trim() !== '' &&
+          !agent.agent_code.includes('http') && !agent.agent_key.includes('http')) {
         // Usar um pequeno delay para evitar chamadas múltiplas
         const timer = setTimeout(() => {
-    fetchGames(); 
-    fetchAgentBalance();
+          console.log('Buscando jogos e saldo para agente:', agent.agent_code);
+          fetchGames(); 
+          fetchAgentBalance();
         }, 300);
         return () => clearTimeout(timer);
       } else {
         // Limpar dados se o agente não estiver válido
+        console.log('Agente inválido - não buscando jogos/saldo:', {
+          is_active: agent.is_active,
+          has_code: !!agent.agent_code,
+          has_key: !!agent.agent_key,
+          code: agent.agent_code,
+          key: agent.agent_key
+        });
         setGames([]);
         setProviders([]);
         setAgentBalance(null);
         setBalanceError('');
-        setGamesError('');
+        setGamesError('Nenhum agente IGameWin ativo configurado ou credenciais incompletas (agent_code/agent_key vazios)');
       }
     } else {
       // Se não há agentes, limpar formulário
@@ -1211,7 +1223,7 @@ function IGameWinTab({ token }: { token: string }) {
       setProviders([]);
       setAgentBalance(null);
       setBalanceError('');
-      setGamesError('');
+      setGamesError('Nenhum agente configurado. Configure um agente IGameWin primeiro.');
     }
   }, [items]); // Mudado para items em vez de items.length para detectar mudanças nos dados
 
@@ -1233,8 +1245,12 @@ function IGameWinTab({ token }: { token: string }) {
       {loading && <div className="text-sm text-gray-400">Carregando agente...</div>}
 
       {/* Saldo do Agente */}
-      {items.length > 0 && items[0].is_active && items[0].agent_code && items[0].agent_key && 
-       items[0].agent_code.trim() !== '' && items[0].agent_key.trim() !== '' && (
+      {(() => {
+        const activeAgent = items.find(a => a.is_active) || items[0];
+        return activeAgent && activeAgent.is_active && activeAgent.agent_code && activeAgent.agent_key && 
+               activeAgent.agent_code.trim() !== '' && activeAgent.agent_key.trim() !== '' &&
+               !activeAgent.agent_code.includes('http') && !activeAgent.agent_key.includes('http');
+      })() && (
         <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 p-5 rounded-lg border border-gray-700">
           <div className="flex items-center justify-between mb-3">
             <div>
