@@ -1115,9 +1115,26 @@ function IGameWinTab({ token }: { token: string }) {
 
   useEffect(() => { 
     fetchData(); 
-    fetchGames(); 
-    fetchAgentBalance();
   }, []);
+
+  // Preencher formulário quando houver um agente existente
+  useEffect(() => {
+    if (items.length > 0 && items[0]) {
+      const agent = items[0];
+      setForm({
+        agent_code: agent.agent_code || '',
+        agent_key: agent.agent_key || '',
+        api_url: agent.api_url || 'https://api.igamewin.com',
+        credentials: agent.credentials || '',
+        is_active: agent.is_active !== undefined ? agent.is_active : true
+      });
+      // Só buscar jogos e saldo se o agente estiver ativo e tiver credenciais
+      if (agent.is_active && agent.agent_code && agent.agent_key) {
+        fetchGames();
+        fetchAgentBalance();
+      }
+    }
+  }, [items]);
 
   return (
     <div className="space-y-4">
