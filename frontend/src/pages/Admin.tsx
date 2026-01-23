@@ -1178,8 +1178,8 @@ function IGameWinTab({ token }: { token: string }) {
           agent.agent_code.trim() !== '' && agent.agent_key.trim() !== '') {
         // Usar um pequeno delay para evitar chamadas múltiplas
         const timer = setTimeout(() => {
-          fetchGames();
-          fetchAgentBalance();
+    fetchGames(); 
+    fetchAgentBalance();
         }, 300);
         return () => clearTimeout(timer);
       } else {
@@ -1284,14 +1284,25 @@ function IGameWinTab({ token }: { token: string }) {
       </div>
 
       <div className="grid gap-3">
-        {items.map(a => (
-          <div key={a.id} className="p-4 rounded border border-gray-700 bg-gray-800/50">
-            <div className="font-bold text-lg">{a.agent_code}</div>
-            <div className="text-sm text-gray-400">API: {a.api_url}</div>
-            <div className="text-sm text-gray-400">Status: {a.is_active ? 'Ativo' : 'Inativo'}</div>
-            <div className="text-xs text-gray-500 break-all mt-1">Credenciais: {a.credentials}</div>
+        {items.length > 0 && (() => {
+          // Mostrar apenas o primeiro agente (ou o agente ativo se houver)
+          const activeAgent = items.find(a => a.is_active) || items[0];
+          return (
+            <div key={activeAgent.id} className="p-4 rounded border border-gray-700 bg-gray-800/50">
+              <div className="font-bold text-lg">{activeAgent.agent_code || 'Sem código'}</div>
+              <div className="text-sm text-gray-400">API: {activeAgent.api_url}</div>
+              <div className="text-sm text-gray-400">Status: {activeAgent.is_active ? 'Ativo' : 'Inativo'}</div>
+              {activeAgent.credentials && (
+                <div className="text-xs text-gray-500 break-all mt-1">Credenciais: {activeAgent.credentials}</div>
+              )}
+              {items.length > 1 && (
+                <div className="text-xs text-yellow-400 mt-2">
+                  ⚠️ Existem {items.length} agentes configurados. Apenas o agente ativo é usado pelo sistema.
           </div>
-        ))}
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       <div className="space-y-3 mt-6">
