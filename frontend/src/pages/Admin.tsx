@@ -1026,6 +1026,7 @@ function IGameWinTab({ token }: { token: string }) {
   const [agentBalance, setAgentBalance] = useState<number | null>(null);
   const [loadingBalance, setLoadingBalance] = useState(false);
   const [balanceError, setBalanceError] = useState('');
+  const lastAgentKeyRef = useRef<string>('');
 
   const fetchData = async () => {
     setLoading(true); setError('');
@@ -1184,6 +1185,7 @@ function IGameWinTab({ token }: { token: string }) {
       setAgentBalance(null);
       setBalanceError('');
       setGamesError('Nenhum agente configurado. Configure um agente IGameWin primeiro.');
+      lastAgentKeyRef.current = '';
       return;
     }
 
@@ -1192,6 +1194,13 @@ function IGameWinTab({ token }: { token: string }) {
     
     // Criar uma chave única para o agente atual
     const agentKey = `${agent.id}-${agent.agent_code || ''}-${agent.agent_key || ''}-${agent.is_active}`;
+    
+    // Se a chave não mudou, não fazer nada
+    if (lastAgentKeyRef.current === agentKey) {
+      return;
+    }
+    
+    lastAgentKeyRef.current = agentKey;
     
     // Verificar se o formulário já está atualizado com este agente
     const currentFormKey = `${form.agent_code}-${form.agent_key}-${form.is_active}`;
