@@ -1144,17 +1144,15 @@ function IGameWinTab({ token }: { token: string }) {
         is_active: agent.is_active !== undefined ? agent.is_active : true
       };
       
-      // Só atualizar o formulário se os dados mudaram
-      if (JSON.stringify(newForm) !== JSON.stringify(form)) {
-        setForm(newForm);
-      }
+      // Atualizar formulário sempre que os dados do agente mudarem
+      setForm(newForm);
       
       // Só buscar jogos e saldo se o agente estiver ativo e tiver credenciais válidas
       if (agent.is_active && agent.agent_code && agent.agent_key) {
         // Usar um pequeno delay para evitar chamadas múltiplas
         const timer = setTimeout(() => {
-    fetchGames(); 
-    fetchAgentBalance();
+          fetchGames();
+          fetchAgentBalance();
         }, 300);
         return () => clearTimeout(timer);
       } else {
