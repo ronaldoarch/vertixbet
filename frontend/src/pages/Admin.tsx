@@ -1234,7 +1234,17 @@ function IGameWinTab({ token }: { token: string }) {
       setProviders([]);
       setAgentBalance(null);
       setBalanceError('');
-      setGamesError('Nenhum agente IGameWin ativo configurado ou credenciais incompletas (agent_code/agent_key vazios ou inválidos)');
+      
+      // Mensagem mais específica baseada no problema
+      if (!agent.is_active) {
+        setGamesError('O agente está inativo. Ative o agente para buscar provedores e jogos.');
+      } else if (!agent.agent_code || agent.agent_code.trim() === '' || agent.agent_code.includes('http')) {
+        setGamesError('Agent Code inválido ou vazio. Verifique se o código do agente está correto (não deve ser uma URL).');
+      } else if (!agent.agent_key || agent.agent_key.trim() === '' || agent.agent_key.includes('http')) {
+        setGamesError('Agent Key inválida ou vazia. Verifique se a chave do agente está correta.');
+      } else {
+        setGamesError('Nenhum agente IGameWin ativo configurado ou credenciais incompletas (agent_code/agent_key vazios ou inválidos)');
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items.length, JSON.stringify(items.map(a => ({ id: a.id, agent_code: a.agent_code, agent_key: a.agent_key, is_active: a.is_active })))]);
