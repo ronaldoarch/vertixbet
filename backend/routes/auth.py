@@ -9,6 +9,9 @@ from schemas import LoginRequest, Token, UserResponse, UserCreate
 from auth import authenticate_user, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_password_hash, get_user_by_username
 from dependencies import get_current_user
 from models import User, UserRole
+from collections import defaultdict
+from datetime import datetime, timedelta
+import threading
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -16,6 +19,37 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 def get_limiter(request: Request):
     """Helper para obter o limiter do app"""
     return request.app.state.limiter
+
+# Rate limiting por username (não por IP) para evitar bloqueio compartilhado
+# Estrutura: {username: [timestamps das tentativas]}
+_login_attempts = defaultdict(list)
+_lock = threading.Lock()
+_RATE_LIMIT_MAX = 5  # Máximo de tentativas
+_RATE_LIMIT_WINDOW = timedelta(minutes=1)  # Janela de tempo
+
+
+def check_rate_limit(username: str) -> bool:
+    """
+    Verifica se o username excedeu o limite de tentativas.
+    Retorna True se está dentro do limite, False se excedeu.
+    """
+    now = datetime.utcnow()
+    username_lower = username.lower().strip()
+    
+    with _lock:
+        # Limpar tentativas antigas (fora da janela de tempo)
+        _login_attempts[username_lower] = [
+            ts for ts in _login_attempts[username_lower]
+            if now - ts < _RATE_LIMIT_WINDOW
+        ]
+        
+        # Verificar se excedeu o limite
+        if len(_login_attempts[username_lower]) >= _RATE_LIMIT_MAX:
+            return False
+        
+        # Registrar nova tentativa
+        _login_attempts[username_lower].append(now)
+        return True
 
 
 @router.post("/register", response_model=UserResponse)
@@ -57,12 +91,14 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=Token)
 async def login(request: Request, login_data: LoginRequest, db: Session = Depends(get_db)):
-    # Rate limiting: aplicar usando o limiter do app.state
-    limiter = request.app.state.limiter
+    # Rate limiting: usar username/email em vez de IP para evitar bloqueio compartilhado
+    # Isso evita que usuários no mesmo Wi-Fi compartilhem o limite
     
-    # Aplicar rate limit usando o decorador do slowapi de forma dinâmica
-    # O slowapi precisa que o decorador seja aplicado antes da função ser chamada
-    # Vamos usar uma abordagem mais simples: aplicar o rate limit manualmente
+    if not check_rate_limit(login_data.username):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Muitas tentativas de login foram realizadas. Tente novamente mais tarde."
+        )
     
     # authenticate_user já tenta por username e email
     user = authenticate_user(db, login_data.username, login_data.password)
@@ -78,6 +114,12 @@ async def login(request: Request, login_data: LoginRequest, db: Session = Depend
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is disabled"
         )
+    
+    # Se o login foi bem-sucedido, limpar tentativas anteriores desse username
+    username_lower = login_data.username.lower().strip()
+    with _lock:
+        _login_attempts[username_lower] = []
+    
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user.username, "role": user.role.value},
