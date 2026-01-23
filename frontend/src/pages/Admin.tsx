@@ -1046,7 +1046,10 @@ function IGameWinTab({ token }: { token: string }) {
       const res = await fetch(`${API_URL}/api/admin/igamewin/games${query}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (!res.ok) throw new Error('Falha ao carregar jogos/provedores');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ detail: 'Falha ao carregar jogos/provedores' }));
+        throw new Error(data.detail || 'Falha ao carregar jogos/provedores');
+      }
       const data = await res.json();
       setProviders(data.providers || []);
       if (!providerCode && !provider && data.providers?.length) {
