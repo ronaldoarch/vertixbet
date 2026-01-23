@@ -1211,8 +1211,13 @@ function IGameWinTab({ token }: { token: string }) {
     fetchData(); 
   }, []);
 
-  // Preencher formulário quando houver um agente existente
+  // Preencher formulário quando houver um agente existente (apenas se não estiver editando manualmente)
   useEffect(() => {
+    // Se estiver editando manualmente, não preencher automaticamente
+    if (editingId !== null) {
+      return;
+    }
+
     if (items.length === 0) {
       // Se não há agentes, limpar formulário
       setForm({ agent_code: '', agent_key: '', api_url: 'https://api.igamewin.com', credentials: '', is_active: true });
@@ -1283,7 +1288,7 @@ function IGameWinTab({ token }: { token: string }) {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items.length, JSON.stringify(items.map(a => ({ id: a.id, agent_code: a.agent_code, agent_key: a.agent_key, is_active: a.is_active })))]);
+  }, [items.length, JSON.stringify(items.map(a => ({ id: a.id, agent_code: a.agent_code, agent_key: a.agent_key, is_active: a.is_active }))), editingId]);
 
   return (
     <div className="space-y-4">
