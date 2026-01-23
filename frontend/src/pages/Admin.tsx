@@ -1018,6 +1018,7 @@ function IGameWinTab({ token }: { token: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState({ agent_code: '', agent_key: '', api_url: 'https://api.igamewin.com', credentials: '', is_active: true });
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [games, setGames] = useState<any[]>([]);
   const [providers, setProviders] = useState<any[]>([]);
   const [providerCode, setProviderCode] = useState('');
@@ -1337,6 +1338,11 @@ function IGameWinTab({ token }: { token: string }) {
       )}
 
       <div className="grid md:grid-cols-2 gap-3 bg-gray-800/60 p-4 rounded border border-gray-700">
+        {editingId && (
+          <div className="md:col-span-2 bg-blue-500/20 border border-blue-500 rounded p-2 text-blue-300 text-sm">
+            ✏️ Editando agente ID: {editingId}
+          </div>
+        )}
         <input className="bg-gray-700 rounded px-3 py-2 text-sm" placeholder="Agent Code" value={form.agent_code} onChange={e=>setForm({...form, agent_code:e.target.value})}/>
         <input className="bg-gray-700 rounded px-3 py-2 text-sm" placeholder="Agent Key" value={form.agent_key} onChange={e=>setForm({...form, agent_key:e.target.value})}/>
         <input className="bg-gray-700 rounded px-3 py-2 text-sm md:col-span-2" placeholder="API URL" value={form.api_url} onChange={e=>setForm({...form, api_url:e.target.value})}/>
@@ -1345,45 +1351,69 @@ function IGameWinTab({ token }: { token: string }) {
           <input type="checkbox" checked={form.is_active} onChange={e=>setForm({...form, is_active:e.target.checked})}/>
           <span>Ativo</span>
         </div>
-        <button onClick={create} className="md:col-span-2 bg-[#ff6b35] hover:bg-[#ff7b35] text-white py-2 rounded font-semibold">Salvar agente</button>
+        <div className="md:col-span-2 flex gap-2">
+          <button onClick={create} disabled={loading} className="flex-1 bg-[#ff6b35] hover:bg-[#ff7b35] disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-2 rounded font-semibold">
+            {editingId ? 'Atualizar agente' : 'Salvar agente'}
+          </button>
+          {editingId && (
+            <button onClick={resetForm} className="px-4 bg-gray-600 hover:bg-gray-500 text-white py-2 rounded font-semibold">
+              Cancelar
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="grid gap-3">
-        {items.length > 0 && (() => {
-          // Mostrar o agente que corresponde ao formulário, ou o agente ativo, ou o primeiro
-          let displayAgent = null;
-          
-          // Primeiro, tentar encontrar o agente que corresponde ao agent_code do formulário
-          if (form.agent_code && form.agent_code.trim() !== '') {
-            displayAgent = items.find(a => a.agent_code === form.agent_code.trim());
-          }
-          
-          // Se não encontrou, usar o agente ativo
-          if (!displayAgent) {
-            displayAgent = items.find(a => a.is_active);
-          }
-          
-          // Se ainda não encontrou, usar o primeiro
-          if (!displayAgent) {
-            displayAgent = items[0];
-          }
-          
-          return (
-            <div key={displayAgent.id} className="p-4 rounded border border-gray-700 bg-gray-800/50">
-              <div className="font-bold text-lg">{displayAgent.agent_code || 'Sem código'}</div>
-              <div className="text-sm text-gray-400">API: {displayAgent.api_url}</div>
-              <div className="text-sm text-gray-400">Status: {displayAgent.is_active ? 'Ativo' : 'Inativo'}</div>
-              {displayAgent.credentials && (
-                <div className="text-xs text-gray-500 break-all mt-1">Credenciais: {displayAgent.credentials}</div>
-              )}
-              {items.length > 1 && (
-                <div className="text-xs text-yellow-400 mt-2">
-                  ⚠️ Existem {items.length} agentes configurados. Apenas o agente ativo é usado pelo sistema.
+      <div className="space-y-3">
+        <h3 className="text-lg font-bold">Agentes Configurados ({items.length})</h3>
+        {items.length === 0 ? (
+          <div className="text-gray-400 text-sm p-4 bg-gray-800/50 rounded border border-gray-700">
+            Nenhum agente configurado. Use o formulário acima para criar um novo agente.
           </div>
-              )}
-            </div>
-          );
-        })()}
+        ) : (
+          <div className="grid gap-3">
+            {items.map((agent) => (
+              <div key={agent.id} className={`p-4 rounded border ${agent.is_active ? 'border-green-500/50 bg-gray-800/50' : 'border-gray-700 bg-gray-800/30'}`}>
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="font-bold text-lg">{agent.agent_code || 'Sem código'}</div>
+                      {agent.is_active && (
+                        <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded border border-green-500/30">
+                          Ativo
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm text-gray-400">API: {agent.api_url}</div>
+                    <div className="text-sm text-gray-400">Status: {agent.is_active ? 'Ativo' : 'Inativo'}</div>
+                    {agent.agent_key && (
+                      <div className="text-xs text-gray-500 mt-1">Agent Key: {agent.agent_key.substring(0, 10)}...</div>
+                    )}
+                    {agent.credentials && (
+                      <div className="text-xs text-gray-500 break-all mt-1">Credenciais: {agent.credentials}</div>
+                    )}
+                  </div>
+                  <div className="flex gap-2 ml-4">
+                    <button
+                      onClick={() => loadForEdit(agent)}
+                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded"
+                      title="Editar agente"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => deleteAgent(agent.id)}
+                      disabled={loading}
+                      className="px-3 py-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded"
+                      title="Excluir agente"
+                    >
+                      Excluir
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="space-y-3 mt-6">
