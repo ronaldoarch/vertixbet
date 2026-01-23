@@ -1066,13 +1066,24 @@ function IGameWinTab({ token }: { token: string }) {
   };
 
   const fetchAgentBalance = async () => {
-    setLoadingBalance(true); setBalanceError('');
+    // Validar se há credenciais antes de fazer a chamada
+    const currentAgent = items[0];
+    if (!currentAgent || !currentAgent.is_active || 
+        !currentAgent.agent_code || !currentAgent.agent_key ||
+        currentAgent.agent_code.trim() === '' || currentAgent.agent_key.trim() === '') {
+      setBalanceError('Nenhum agente IGameWin ativo configurado ou credenciais incompletas (agent_code/agent_key vazios)');
+      setAgentBalance(null);
+      return;
+    }
+
+    setLoadingBalance(true); 
+    setBalanceError('');
     try {
       const res = await fetch(`${API_URL}/api/admin/igamewin/agent-balance`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({ detail: 'Falha ao carregar saldo do agente' }));
         throw new Error(data.detail || 'Falha ao carregar saldo do agente');
       }
       const data = await res.json();
@@ -1148,7 +1159,8 @@ function IGameWinTab({ token }: { token: string }) {
       setForm(newForm);
       
       // Só buscar jogos e saldo se o agente estiver ativo e tiver credenciais válidas
-      if (agent.is_active && agent.agent_code && agent.agent_key) {
+      if (agent.is_active && agent.agent_code && agent.agent_key && 
+          agent.agent_code.trim() !== '' && agent.agent_key.trim() !== '') {
         // Usar um pequeno delay para evitar chamadas múltiplas
         const timer = setTimeout(() => {
           fetchGames();
@@ -1172,7 +1184,7 @@ function IGameWinTab({ token }: { token: string }) {
       setBalanceError('');
       setGamesError('');
     }
-  }, [items.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [items]); // Mudado para items em vez de items.length para detectar mudanças nos dados
 
   return (
     <div className="space-y-4">
@@ -1192,7 +1204,8 @@ function IGameWinTab({ token }: { token: string }) {
       {loading && <div className="text-sm text-gray-400">Carregando agente...</div>}
 
       {/* Saldo do Agente */}
-      {items.length > 0 && items[0].is_active && (
+      {items.length > 0 && items[0].is_active && items[0].agent_code && items[0].agent_key && 
+       items[0].agent_code.trim() !== '' && items[0].agent_key.trim() !== '' && (
         <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 p-5 rounded-lg border border-gray-700">
           <div className="flex items-center justify-between mb-3">
             <div>
