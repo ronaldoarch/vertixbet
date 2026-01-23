@@ -93,7 +93,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await res.json();
 
     if (!res.ok) {
-      throw new Error(data.detail || 'Erro ao fazer login');
+      // Traduzir mensagens de erro comuns
+      let errorMessage = data.detail || 'Erro ao fazer login';
+      
+      if (res.status === 429) {
+        errorMessage = 'Muitas tentativas de login foram realizadas. Tente novamente mais tarde.';
+      } else if (data.detail && (data.detail.includes('Too many') || data.detail.includes('Muitas tentativas'))) {
+        errorMessage = 'Muitas tentativas de login foram realizadas. Tente novamente mais tarde.';
+      }
+      
+      throw new Error(errorMessage);
     }
 
     const authToken = data.access_token;

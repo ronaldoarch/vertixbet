@@ -16,7 +16,16 @@ limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(title="VertixBet API", version="1.0.0")
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Custom exception handler para traduzir mensagens de rate limit
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Muitas tentativas de login foram realizadas. Tente novamente mais tarde."}
+    )
+
+app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
 
 # Configurar CORS - permite variáveis de ambiente para produção
 cors_origins_env = os.getenv("CORS_ORIGINS", "").strip()

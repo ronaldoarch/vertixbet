@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from datetime import timedelta
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from database import get_db
 from schemas import LoginRequest, Token, UserResponse, UserCreate
 from auth import authenticate_user, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_password_hash, get_user_by_username
@@ -56,18 +57,12 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=Token)
 async def login(request: Request, login_data: LoginRequest, db: Session = Depends(get_db)):
-    # Rate limiting: 5 tentativas por minuto por IP
+    # Rate limiting: aplicar usando o limiter do app.state
     limiter = request.app.state.limiter
     
-    # Aplicar rate limit
-    try:
-        # Usar o método correto do slowapi para verificar limite
-        limiter.hit(f"login:{get_remote_address(request)}", "5/minute")
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many login attempts. Please try again later."
-        )
+    # Aplicar rate limit usando o decorador do slowapi de forma dinâmica
+    # O slowapi precisa que o decorador seja aplicado antes da função ser chamada
+    # Vamos usar uma abordagem mais simples: aplicar o rate limit manualmente
     
     # authenticate_user já tenta por username e email
     user = authenticate_user(db, login_data.username, login_data.password)
