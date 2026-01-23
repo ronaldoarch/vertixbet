@@ -1117,47 +1117,34 @@ function IGameWinTab({ token }: { token: string }) {
     setLoading(true); setError('');
     const body = JSON.stringify(form);
     try {
-      // Encontrar o agente que corresponde ao agent_code do formulário, ou o primeiro agente
-      let existingId = null;
-      
-      // Se o formulário tem um agent_code, tentar encontrar o agente correspondente
-      if (form.agent_code && form.agent_code.trim() !== '') {
-        const matchingAgent = items.find(a => a.agent_code === form.agent_code.trim());
-        if (matchingAgent) {
-          existingId = matchingAgent.id;
-        }
-      }
-      
-      // Se não encontrou pelo agent_code, usar o primeiro agente (para atualizar)
-      if (!existingId && items.length > 0) {
-        existingId = items[0].id;
-      }
-      
       let res;
       
-      if (existingId) {
+      if (editingId) {
         // Fazer update do agente existente
-        res = await fetch(`${API_URL}/api/admin/igamewin-agents/${existingId}`, {
+        res = await fetch(`${API_URL}/api/admin/igamewin-agents/${editingId}`, {
           method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body
-      });
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body
+        });
       } else {
-        // Criar novo agente apenas se não existir nenhum
+        // Criar novo agente
         res = await fetch(`${API_URL}/api/admin/igamewin-agents`, {
           method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body
-          });
-        }
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body
+        });
+      }
       
       if (!res.ok) {
         const data = await res.json().catch(() => ({ detail: 'Erro ao salvar agente' }));
         throw new Error(data.detail || 'Falha ao salvar agente');
       }
       
-      // Recarregar dados após salvar
+      // Limpar formulário e recarregar dados
+      setEditingId(null);
+      setForm({ agent_code: '', agent_key: '', api_url: 'https://api.igamewin.com', credentials: '', is_active: true });
       await fetchData();
+      
       // Aguardar um pouco para garantir que o banco foi atualizado
       setTimeout(() => {
         if (form.is_active && form.agent_code && form.agent_key) {
@@ -1165,6 +1152,54 @@ function IGameWinTab({ token }: { token: string }) {
           fetchAgentBalance();
         }
       }, 500);
+    } catch (err:any) { 
+      setError(err.message); 
+    } finally { 
+      setLoading(false); 
+    }
+  };
+
+  const loadForEdit = (agent: any) => {
+    setEditingId(agent.id);
+    setForm({
+      agent_code: agent.agent_code || '',
+      agent_key: agent.agent_key || '',
+      api_url: agent.api_url || 'https://api.igamewin.com',
+      credentials: agent.credentials || '',
+      is_active: agent.is_active !== undefined ? agent.is_active : true
+    });
+    // Scroll para o formulário
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const resetForm = () => {
+    setEditingId(null);
+    setForm({ agent_code: '', agent_key: '', api_url: 'https://api.igamewin.com', credentials: '', is_active: true });
+  };
+
+  const deleteAgent = async (agentId: number) => {
+    if (!confirm('Tem certeza que deseja excluir este agente? Esta ação não pode ser desfeita.')) {
+      return;
+    }
+
+    setLoading(true); setError('');
+    try {
+      const res = await fetch(`${API_URL}/api/admin/igamewin-agents/${agentId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ detail: 'Erro ao excluir agente' }));
+        throw new Error(data.detail || 'Falha ao excluir agente');
+      }
+      
+      // Se estava editando o agente excluído, limpar formulário
+      if (editingId === agentId) {
+        resetForm();
+      }
+      
+      await fetchData();
     } catch (err:any) { 
       setError(err.message); 
     } finally { 
