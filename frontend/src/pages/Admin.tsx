@@ -1262,8 +1262,21 @@ function IGameWinTab({ token }: { token: string }) {
           </button>
         </div>
       </div>
-      {error && <div className="text-red-400">{error}</div>}
-      {gamesError && <div className="text-red-400">{gamesError}</div>}
+      {error && (
+        <div className="bg-red-500/20 border border-red-500 rounded-lg p-3 text-red-400 text-sm">
+          {error}
+        </div>
+      )}
+      {gamesError && (
+        <div className="bg-orange-500/20 border border-orange-500 rounded-lg p-3 text-orange-400 text-sm">
+          {gamesError}
+          {items.length > 0 && (
+            <div className="mt-2 text-xs text-orange-300">
+              💡 Dica: Verifique se o "Agent Code" não contém uma URL. O código do agente deve ser um número ou string alfanumérica, não uma URL.
+            </div>
+          )}
+        </div>
+      )}
       {loading && <div className="text-sm text-gray-400">Carregando agente...</div>}
 
       {/* Saldo do Agente */}
