@@ -265,6 +265,7 @@ async def webhook_pix_cashin(request: Request, db: Session = Depends(get_db)):
     """
     try:
         data = await request.json()
+        print(f"Webhook PIX Cash-in recebido: {data}")
         
         # Buscar gateway PIX ativo para validar hash
         gateway = get_active_pix_gateway(db)
@@ -276,6 +277,7 @@ async def webhook_pix_cashin(request: Request, db: Session = Depends(get_db)):
         
         # Validar hash
         if not SuitPayAPI.validate_webhook_hash(data.copy(), client_secret):
+            print(f"Hash inválido no webhook: {data.get('hash')}")
             raise HTTPException(status_code=401, detail="Hash inválido")
         
         # Processar webhook conforme documentação oficial SuitPay
@@ -306,16 +308,21 @@ async def webhook_pix_cashin(request: Request, db: Session = Depends(get_db)):
                     break
         
         if not deposit:
+            print(f"Depósito não encontrado para transação: {id_transaction} ou request: {request_number}")
             return {"status": "ok", "message": "Depósito não encontrado"}
         
         # Atualizar status do depósito
-        if status_transaction == "PAID_OUT":
+        # Aceitar vários status de sucesso possíveis, pois PAID_OUT é estranho para cash-in
+        success_statuses = ["PAID_OUT", "PAID", "COMPLETED", "SUCCESS", "DONE"]
+        
+        if status_transaction in success_statuses:
             if deposit.status != TransactionStatus.APPROVED:
                 deposit.status = TransactionStatus.APPROVED
                 # Adicionar saldo ao usuário
                 user = db.query(User).filter(User.id == deposit.user_id).first()
                 if user:
                     user.balance += deposit.amount
+                    print(f"Depósito aprovado: {deposit.id}, valor: {deposit.amount}, novo saldo: {user.balance}")
         elif status_transaction == "CHARGEBACK":
             if deposit.status == TransactionStatus.APPROVED:
                 # Reverter saldo se já foi aprovado
