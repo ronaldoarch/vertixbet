@@ -77,6 +77,9 @@ async def create_pix_deposit(
     if request.amount <= 0:
         raise HTTPException(status_code=400, detail="Valor deve ser maior que zero")
     
+    if request.amount < 2:
+        raise HTTPException(status_code=400, detail="Valor mínimo de depósito é R$ 2,00")
+    
     # Validar CPF/CNPJ (não pode estar vazio conforme SuitPay)
     if not request.payer_tax_id or not request.payer_tax_id.strip():
         raise HTTPException(
@@ -312,8 +315,9 @@ async def webhook_pix_cashin(request: Request, db: Session = Depends(get_db)):
             return {"status": "ok", "message": "Depósito não encontrado"}
         
         # Atualizar status do depósito
-        # Aceitar vários status de sucesso possíveis, pois PAID_OUT é estranho para cash-in
-        success_statuses = ["PAID_OUT", "PAID", "COMPLETED", "SUCCESS", "DONE"]
+        # Aceitar vários status de sucesso possíveis para cash-in (depósitos)
+        # PAID_OUT é apenas para cash-out (saques), não para depósitos
+        success_statuses = ["PAID", "COMPLETED", "SUCCESS", "DONE"]
         
         if status_transaction in success_statuses:
             if deposit.status != TransactionStatus.APPROVED:

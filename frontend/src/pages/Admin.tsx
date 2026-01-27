@@ -1546,8 +1546,12 @@ function IGameWinTab({ token }: { token: string }) {
 
 function SettingsTab({ token }: { token: string }) {
   const [form, setForm] = useState({ pass_rate: 0, min_amount: 0, is_active: true });
+  const [supportPhone, setSupportPhone] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingSupport, setLoadingSupport] = useState(false);
   const [error, setError] = useState('');
+  const [supportError, setSupportError] = useState('');
+  const [supportSuccess, setSupportSuccess] = useState('');
 
   const load = async () => {
     setLoading(true); setError('');
@@ -1560,6 +1564,29 @@ function SettingsTab({ token }: { token: string }) {
       setForm({ pass_rate: data.pass_rate ?? 0, min_amount: data.min_amount ?? 0, is_active: data.is_active });
     } catch (err:any) { setError(err.message); } finally { setLoading(false); }
   };
+
+  const loadSupportPhone = async () => {
+    setLoadingSupport(true); setSupportError('');
+    try {
+      const res = await fetch(`${API_URL}/api/admin/site-settings/support_phone`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSupportPhone(data.value || '');
+      } else if (res.status === 404) {
+        // Configuração não existe ainda, deixar vazio
+        setSupportPhone('');
+      } else {
+        throw new Error('Falha ao carregar número de suporte');
+      }
+    } catch (err:any) { 
+      setSupportError(err.message); 
+    } finally { 
+      setLoadingSupport(false); 
+    }
+  };
+
   const save = async () => {
     setLoading(true); setError('');
     try {
@@ -1573,27 +1600,103 @@ function SettingsTab({ token }: { token: string }) {
     } catch (err:any) { setError(err.message); } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, []);
+  const saveSupportPhone = async () => {
+    setLoadingSupport(true); setSupportError(''); setSupportSuccess('');
+    try {
+      // Tentar atualizar primeiro
+      let res = await fetch(`${API_URL}/api/admin/site-settings/support_phone`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ value: supportPhone, description: 'Número de telefone para suporte ao cliente (WhatsApp)' })
+      });
+
+      // Se não existir, criar
+      if (res.status === 404) {
+        res = await fetch(`${API_URL}/api/admin/site-settings`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ 
+            key: 'support_phone', 
+            value: supportPhone, 
+            description: 'Número de telefone para suporte ao cliente (WhatsApp)' 
+          })
+        });
+      }
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Falha ao salvar número de suporte');
+      }
+      
+      setSupportSuccess('Número de suporte salvo com sucesso!');
+      setTimeout(() => setSupportSuccess(''), 3000);
+      await loadSupportPhone();
+    } catch (err:any) { 
+      setSupportError(err.message); 
+    } finally { 
+      setLoadingSupport(false); 
+    }
+  };
+
+  useEffect(() => { 
+    load(); 
+    loadSupportPhone();
+  }, []);
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-2xl font-bold">Configurações (FTD)</h2>
-      {error && <div className="text-red-400">{error}</div>}
-      {loading && <div className="text-sm text-gray-400">Carregando...</div>}
-      <div className="grid md:grid-cols-2 gap-3 bg-gray-800/60 p-4 rounded border border-gray-700">
-        <div>
-          <label className="text-sm text-gray-300">Taxa de passagem (%)</label>
-          <input type="number" className="w-full bg-gray-700 rounded px-3 py-2" value={form.pass_rate} onChange={e=>setForm({...form, pass_rate:Number(e.target.value)})}/>
+    <div className="space-y-6">
+      {/* Configurações FTD */}
+      <div className="space-y-4">
+        <h2 className="text-2xl font-bold">Configurações (FTD)</h2>
+        {error && <div className="text-red-400">{error}</div>}
+        {loading && <div className="text-sm text-gray-400">Carregando...</div>}
+        <div className="grid md:grid-cols-2 gap-3 bg-gray-800/60 p-4 rounded border border-gray-700">
+          <div>
+            <label className="text-sm text-gray-300">Taxa de passagem (%)</label>
+            <input type="number" className="w-full bg-gray-700 rounded px-3 py-2" value={form.pass_rate} onChange={e=>setForm({...form, pass_rate:Number(e.target.value)})}/>
+          </div>
+          <div>
+            <label className="text-sm text-gray-300">Depósito mínimo</label>
+            <input type="number" className="w-full bg-gray-700 rounded px-3 py-2" value={form.min_amount} onChange={e=>setForm({...form, min_amount:Number(e.target.value)})}/>
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="checkbox" checked={form.is_active} onChange={e=>setForm({...form, is_active:e.target.checked})}/>
+            <span>Ativo</span>
+          </div>
+          <button onClick={save} className="md:col-span-2 bg-[#ff6b35] hover:bg-[#ff7b35] text-white py-2 rounded font-semibold">Salvar</button>
         </div>
-        <div>
-          <label className="text-sm text-gray-300">Depósito mínimo</label>
-          <input type="number" className="w-full bg-gray-700 rounded px-3 py-2" value={form.min_amount} onChange={e=>setForm({...form, min_amount:Number(e.target.value)})}/>
+      </div>
+
+      {/* Configurações de Suporte */}
+      <div className="space-y-4">
+        <h2 className="text-2xl font-bold">Configurações de Suporte</h2>
+        {supportError && <div className="text-red-400">{supportError}</div>}
+        {supportSuccess && <div className="text-green-400">{supportSuccess}</div>}
+        {loadingSupport && <div className="text-sm text-gray-400">Carregando...</div>}
+        <div className="bg-gray-800/60 p-4 rounded border border-gray-700 space-y-3">
+          <div>
+            <label className="text-sm text-gray-300 block mb-2">
+              Número de Suporte (WhatsApp)
+            </label>
+            <input 
+              type="text" 
+              className="w-full bg-gray-700 rounded px-3 py-2" 
+              placeholder="Ex: 5511999999999 (código do país + DDD + número)"
+              value={supportPhone} 
+              onChange={e => setSupportPhone(e.target.value)}
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              Digite o número completo com código do país (ex: 5511999999999). Este número será usado no botão de chat do site.
+            </p>
+          </div>
+          <button 
+            onClick={saveSupportPhone} 
+            disabled={loadingSupport}
+            className="bg-[#ff6b35] hover:bg-[#ff7b35] disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-2 px-4 rounded font-semibold"
+          >
+            {loadingSupport ? 'Salvando...' : 'Salvar Número de Suporte'}
+          </button>
         </div>
-        <div className="flex items-center gap-2">
-          <input type="checkbox" checked={form.is_active} onChange={e=>setForm({...form, is_active:e.target.checked})}/>
-          <span>Ativo</span>
-        </div>
-        <button onClick={save} className="md:col-span-2 bg-[#ff6b35] hover:bg-[#ff7b35] text-white py-2 rounded font-semibold">Salvar</button>
       </div>
     </div>
   );

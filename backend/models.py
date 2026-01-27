@@ -280,3 +280,14 @@ class TrackingConfig(Base):
     metadata_json = Column(Text)  # JSON com configurações adicionais
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class SiteSettings(Base):
+    __tablename__ = "site_settings"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(100), unique=True, nullable=False, index=True)  # Ex: "support_phone", "support_email", etc
+    value = Column(Text, nullable=True)  # Valor da configuração
+    description = Column(String(255))  # Descrição do que é essa configuração
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

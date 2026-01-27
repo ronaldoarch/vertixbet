@@ -7,6 +7,10 @@ import Game from './pages/Game';
 import Deposit from './pages/Deposit';
 import Withdrawal from './pages/Withdrawal';
 import AffiliatePanel from './pages/AffiliatePanel';
+import TermosCondicoes from './pages/TermosCondicoes';
+import PoliticaPrivacidade from './pages/PoliticaPrivacidade';
+import PoliticaKYC from './pages/PoliticaKYC';
+import JogoResponsavel from './pages/JogoResponsavel';
 import AdminRoute from './components/AdminRoute';
 import AdminLoginRoute from './components/AdminLoginRoute';
 
@@ -20,6 +24,10 @@ export default function AppRouter() {
         <Route path="/sacar" element={<Withdrawal />} />
         <Route path="/jogo/:gameCode" element={<Game />} />
         <Route path="/afiliado" element={<AffiliatePanel />} />
+        <Route path="/termos-e-condicoes" element={<TermosCondicoes />} />
+        <Route path="/politica-de-privacidade" element={<PoliticaPrivacidade />} />
+        <Route path="/politica-kyc" element={<PoliticaKYC />} />
+        <Route path="/jogo-responsavel" element={<JogoResponsavel />} />
         <Route path="/admin/login" element={
           <AdminLoginRoute>
             <AdminLogin />

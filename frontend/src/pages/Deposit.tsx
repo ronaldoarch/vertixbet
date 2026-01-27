@@ -30,8 +30,8 @@ export default function Deposit() {
       return;
     }
 
-    if (value < 10) {
-      setError('Valor mínimo de depósito é R$ 10,00');
+    if (value < 2) {
+      setError('Valor mínimo de depósito é R$ 2,00');
       return;
     }
 
@@ -146,7 +146,7 @@ export default function Deposit() {
                 Digite o valor que deseja depositar. O código PIX será gerado automaticamente.
               </p>
               <p className="text-yellow-400 text-sm">
-                ⚠️ Valor mínimo: R$ 10,00
+                ⚠️ Valor mínimo: R$ 2,00
               </p>
             </div>
 

@@ -12,7 +12,7 @@ from dependencies import get_current_admin_user, get_current_user
 from models import (
     User, Deposit, Withdrawal, FTD, Gateway, IGameWinAgent, FTDSettings,
     TransactionStatus, UserRole, Bet, BetStatus, Notification, NotificationType,
-    Affiliate, Theme, ProviderOrder, TrackingConfig
+    Affiliate, Theme, ProviderOrder, TrackingConfig, SiteSettings
 )
 from schemas import (
     UserResponse, UserCreate, UserUpdate,
@@ -25,7 +25,8 @@ from schemas import (
     AffiliateResponse, AffiliateCreate, AffiliateUpdate,
     ThemeResponse, ThemeCreate, ThemeUpdate,
     ProviderOrderResponse, ProviderOrderCreate, ProviderOrderUpdate,
-    TrackingConfigResponse, TrackingConfigCreate, TrackingConfigUpdate
+    TrackingConfigResponse, TrackingConfigCreate, TrackingConfigUpdate,
+    SiteSettingsResponse, SiteSettingsCreate, SiteSettingsUpdate
 )
 from auth import get_password_hash
 from igamewin_api import get_igamewin_api
@@ -1737,3 +1738,99 @@ async def delete_tracking_config(
     
     db.delete(config)
     db.commit()
+
+
+# ========== SITE SETTINGS ==========
+@router.get("/site-settings", response_model=List[SiteSettingsResponse])
+async def get_site_settings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """Lista todas as configurações do site"""
+    settings = db.query(SiteSettings).all()
+    return settings
+
+
+@router.get("/site-settings/{key}", response_model=SiteSettingsResponse)
+async def get_site_setting(
+    key: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """Busca uma configuração específica por chave"""
+    setting = db.query(SiteSettings).filter(SiteSettings.key == key).first()
+    if not setting:
+        raise HTTPException(status_code=404, detail="Configuração não encontrada")
+    return setting
+
+
+@router.post("/site-settings", response_model=SiteSettingsResponse, status_code=status.HTTP_201_CREATED)
+async def create_site_setting(
+    setting_data: SiteSettingsCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """Cria uma nova configuração do site"""
+    # Verificar se já existe
+    existing = db.query(SiteSettings).filter(SiteSettings.key == setting_data.key).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Configuração com esta chave já existe")
+    
+    setting = SiteSettings(
+        key=setting_data.key,
+        value=setting_data.value,
+        description=setting_data.description
+    )
+    db.add(setting)
+    db.commit()
+    db.refresh(setting)
+    return setting
+
+
+@router.put("/site-settings/{key}", response_model=SiteSettingsResponse)
+async def update_site_setting(
+    key: str,
+    setting_data: SiteSettingsUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """Atualiza uma configuração do site"""
+    setting = db.query(SiteSettings).filter(SiteSettings.key == key).first()
+    if not setting:
+        raise HTTPException(status_code=404, detail="Configuração não encontrada")
+    
+    update_data = setting_data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(setting, field, value)
+    
+    db.commit()
+    db.refresh(setting)
+    return setting
+
+
+@router.delete("/site-settings/{key}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_site_setting(
+    key: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """Deleta uma configuração do site"""
+    setting = db.query(SiteSettings).filter(SiteSettings.key == key).first()
+    if not setting:
+        raise HTTPException(status_code=404, detail="Configuração não encontrada")
+    
+    db.delete(setting)
+    db.commit()
+
+
+# ========== PUBLIC SITE SETTINGS ==========
+@public_router.get("/site-settings/{key}")
+async def get_public_site_setting(
+    key: str,
+    db: Session = Depends(get_db)
+):
+    """Busca uma configuração pública do site (sem autenticação)"""
+    setting = db.query(SiteSettings).filter(SiteSettings.key == key).first()
+    if not setting:
+        return {"key": key, "value": None}
+    return {"key": setting.key, "value": setting.value}
