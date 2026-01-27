@@ -346,11 +346,12 @@ async def webhook_pix_cashin(request: Request, db: Session = Depends(get_db)):
             deposit.external_id = id_transaction
         
         # Atualizar status do depósito
-        # Aceitar vários status de sucesso possíveis para cash-in (depósitos)
-        # PAID_OUT é apenas para cash-out (saques), não para depósitos
+        # Conforme documentação SuitPay: para PIX Cash-in, o status de sucesso é "PAID_OUT"
+        # CHARGEBACK é para estorno
         # Normalizar status para maiúsculas para comparação
         status_transaction_upper = str(status_transaction).upper().strip() if status_transaction else ""
-        success_statuses = ["PAID", "COMPLETED", "SUCCESS", "DONE", "CONFIRMED", "APPROVED"]
+        # Para PIX Cash-in (depósitos), o status de sucesso é PAID_OUT conforme documentação oficial
+        success_statuses = ["PAID_OUT", "PAID", "COMPLETED", "SUCCESS", "DONE", "CONFIRMED", "APPROVED"]
         
         print(f"Status da transação recebido (original): {status_transaction}")
         print(f"Status da transação normalizado: {status_transaction_upper}")
