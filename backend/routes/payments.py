@@ -296,52 +296,118 @@ async def webhook_pix_cashin(request: Request, db: Session = Depends(get_db)):
         
         # Buscar depósito pelo external_id ou request_number
         deposit = None
+        
+        print(f"Buscando depósito - idTransaction: {id_transaction}, requestNumber: {request_number}")
+        
+        # Tentar buscar pelo external_id primeiro
         if id_transaction:
             deposit = db.query(Deposit).filter(Deposit.external_id == id_transaction).first()
+            if deposit:
+                print(f"Depósito encontrado por external_id: {deposit.id}, status: {deposit.status}")
         
+        # Se não encontrou, tentar pelo request_number no metadata
         if not deposit and request_number:
-            # Tentar buscar pelo request_number no metadata
+            print(f"Buscando depósito por request_number: {request_number}")
             deposits = db.query(Deposit).filter(
                 Deposit.status == TransactionStatus.PENDING
             ).all()
+            print(f"Encontrados {len(deposits)} depósitos pendentes")
             for d in deposits:
                 metadata = json.loads(d.metadata_json) if d.metadata_json else {}
-                if metadata.get("request_number") == request_number:
+                stored_request_number = metadata.get("request_number")
+                print(f"Depósito {d.id}: request_number no metadata = {stored_request_number}")
+                if stored_request_number == request_number:
                     deposit = d
+                    print(f"Depósito encontrado por request_number: {deposit.id}")
+                    break
+        
+        # Se ainda não encontrou, tentar buscar por qualquer depósito pendente do usuário com valor correspondente
+        if not deposit and value:
+            print(f"Tentando buscar por valor: {value}")
+            # Buscar todos os depósitos pendentes e verificar valor
+            all_pending = db.query(Deposit).filter(
+                Deposit.status == TransactionStatus.PENDING
+            ).all()
+            for d in all_pending:
+                # Comparar valores com tolerância de 0.01 para diferenças de arredondamento
+                if abs(float(d.amount) - float(value)) < 0.01:
+                    deposit = d
+                    print(f"Depósito encontrado por valor: {deposit.id}, valor: {deposit.amount}")
                     break
         
         if not deposit:
-            print(f"Depósito não encontrado para transação: {id_transaction} ou request: {request_number}")
+            print(f"ERRO: Depósito não encontrado para transação: {id_transaction} ou request: {request_number} ou valor: {value}")
+            print(f"Dados completos do webhook: {json.dumps(data, indent=2)}")
             return {"status": "ok", "message": "Depósito não encontrado"}
+        
+        # Atualizar external_id se o webhook trouxer um idTransaction diferente
+        if id_transaction and deposit.external_id != id_transaction:
+            print(f"Atualizando external_id do depósito {deposit.id}: {deposit.external_id} -> {id_transaction}")
+            deposit.external_id = id_transaction
         
         # Atualizar status do depósito
         # Aceitar vários status de sucesso possíveis para cash-in (depósitos)
         # PAID_OUT é apenas para cash-out (saques), não para depósitos
-        success_statuses = ["PAID", "COMPLETED", "SUCCESS", "DONE"]
+        # Normalizar status para maiúsculas para comparação
+        status_transaction_upper = str(status_transaction).upper().strip() if status_transaction else ""
+        success_statuses = ["PAID", "COMPLETED", "SUCCESS", "DONE", "CONFIRMED", "APPROVED"]
         
-        if status_transaction in success_statuses:
+        print(f"Status da transação recebido (original): {status_transaction}")
+        print(f"Status da transação normalizado: {status_transaction_upper}")
+        print(f"Status atual do depósito: {deposit.status}")
+        print(f"Valor do depósito: {deposit.amount}, Valor do webhook: {value}")
+        print(f"Todos os dados do webhook: {json.dumps(data, indent=2, default=str)}")
+        
+        if status_transaction_upper in success_statuses:
+            print(f"Status de sucesso detectado: {status_transaction_upper}")
             if deposit.status != TransactionStatus.APPROVED:
-                deposit.status = TransactionStatus.APPROVED
-                # Adicionar saldo ao usuário
+                print(f"Aprovando depósito {deposit.id}")
+                saldo_anterior = None
                 user = db.query(User).filter(User.id == deposit.user_id).first()
                 if user:
+                    saldo_anterior = user.balance
                     user.balance += deposit.amount
-                    print(f"Depósito aprovado: {deposit.id}, valor: {deposit.amount}, novo saldo: {user.balance}")
-        elif status_transaction == "CHARGEBACK":
+                    print(f"Saldo anterior: {saldo_anterior}, Valor creditado: {deposit.amount}, Novo saldo: {user.balance}")
+                else:
+                    print(f"ERRO: Usuário {deposit.user_id} não encontrado!")
+                
+                deposit.status = TransactionStatus.APPROVED
+                print(f"Depósito {deposit.id} aprovado com sucesso")
+            else:
+                print(f"Depósito {deposit.id} já estava aprovado, ignorando webhook duplicado")
+        elif status_transaction_upper == "CHARGEBACK":
+            print(f"CHARGEBACK detectado para depósito {deposit.id}")
             if deposit.status == TransactionStatus.APPROVED:
                 # Reverter saldo se já foi aprovado
                 user = db.query(User).filter(User.id == deposit.user_id).first()
                 if user and user.balance >= deposit.amount:
                     user.balance -= deposit.amount
+                    print(f"Saldo revertido: {user.balance}")
             deposit.status = TransactionStatus.CANCELLED
+        else:
+            print(f"Status desconhecido ou não processado: {status_transaction}")
         
         # Atualizar metadata
         metadata = json.loads(deposit.metadata_json) if deposit.metadata_json else {}
         metadata["webhook_data"] = data
         metadata["webhook_received_at"] = datetime.utcnow().isoformat()
+        metadata["status_transaction"] = status_transaction
         deposit.metadata_json = json.dumps(metadata)
         
-        db.commit()
+        print(f"Fazendo commit das alterações...")
+        try:
+            db.commit()
+            print(f"Commit realizado com sucesso")
+            
+            # Refresh dos objetos para garantir que estão atualizados
+            db.refresh(deposit)
+            if 'user' in locals() and user:
+                db.refresh(user)
+                print(f"Saldo final do usuário após commit: {user.balance}")
+        except Exception as commit_error:
+            print(f"ERRO ao fazer commit: {str(commit_error)}")
+            db.rollback()
+            raise
         
         return {"status": "ok", "message": "Webhook processado com sucesso"}
     
