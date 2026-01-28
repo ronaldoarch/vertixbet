@@ -3258,7 +3258,9 @@ function ProviderOrderSection({ token, providers, loadingGames }: { token: strin
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-xl font-bold">Ordenar Provedores</h3>
-          <p className="text-sm text-gray-400">Defina a ordem de exibição dos provedores (primeiros 3 aparecem primeiro)</p>
+          <p className="text-sm text-gray-400">
+            Defina a ordem de exibição dos provedores. Os <strong className="text-[#d4af37]">primeiros 3</strong> serão os únicos a aparecer na home com <strong className="text-[#d4af37]">15 jogos cada</strong>.
+          </p>
         </div>
         <button
           onClick={saveOrders}
