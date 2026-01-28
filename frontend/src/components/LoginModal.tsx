@@ -84,29 +84,54 @@ export default function LoginModal({ isOpen, onClose, onSwitchToRegister }: Logi
         </div>
 
         {/* Form */}
-        <div className="px-8 pb-8 space-y-4">
+        <form 
+          className="px-8 pb-8 space-y-4"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!email || !password) {
+              setError('Preencha todos os campos');
+              return;
+            }
+            setError('');
+            setLoading(true);
+            try {
+              await login(email, password);
+              onClose();
+            } catch (err: any) {
+              setError(err.message || 'Erro ao fazer login');
+            } finally {
+              setLoading(false);
+            }
+          }}
+        >
           {/* Email */}
           <div>
-            <label className="block text-gray-300 text-sm mb-2">Email</label>
+            <label htmlFor="email" className="block text-gray-300 text-sm mb-2">Email</label>
             <input
+              id="email"
+              name="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent transition-all"
               placeholder="seu@email.com"
+              required
             />
           </div>
 
           {/* Password */}
           <div>
-            <label className="block text-gray-300 text-sm mb-2">Senha</label>
+            <label htmlFor="password" className="block text-gray-300 text-sm mb-2">Senha</label>
             <div className="relative">
               <input
+                id="password"
+                name="password"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 pr-12 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#d4af37] focus:border-transparent transition-all"
                 placeholder="Sua senha"
+                required
               />
               <button
                 type="button"
@@ -135,22 +160,7 @@ export default function LoginModal({ isOpen, onClose, onSwitchToRegister }: Logi
 
           {/* Login button */}
           <button
-            onClick={async () => {
-              if (!email || !password) {
-                setError('Preencha todos os campos');
-                return;
-              }
-              setError('');
-              setLoading(true);
-              try {
-                await login(email, password);
-                onClose();
-              } catch (err: any) {
-                setError(err.message || 'Erro ao fazer login');
-              } finally {
-                setLoading(false);
-              }
-            }}
+            type="submit"
             disabled={loading}
             className="w-full bg-[#ff6b35] hover:bg-[#ff7b35] disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-bold py-4 rounded-lg transition-colors text-lg"
           >
@@ -162,6 +172,7 @@ export default function LoginModal({ isOpen, onClose, onSwitchToRegister }: Logi
             <span className="text-gray-400 text-sm">
               Não tem uma conta?{' '}
               <button
+                type="button"
                 onClick={onSwitchToRegister}
                 className="text-[#d4af37] hover:text-[#ffd700] font-semibold transition-colors"
               >
@@ -169,7 +180,7 @@ export default function LoginModal({ isOpen, onClose, onSwitchToRegister }: Logi
               </button>
             </span>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );

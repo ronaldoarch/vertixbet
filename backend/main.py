@@ -40,7 +40,11 @@ if not cors_origins:
         "http://127.0.0.1:5173",
         "http://127.0.0.1:5174",
         "http://127.0.0.1:3000",
-        # Permite qualquer origem do domínio agenciamidas.com em produção
+        # Domínios de produção
+        "https://vertixbet.site",
+        "https://www.vertixbet.site",
+        "https://api.vertixbet.site",
+        # Permite qualquer origem do domínio agenciamidas.com em produção (legado)
         "https://*.agenciamidas.com",
         "http://*.agenciamidas.com",
     ]
@@ -48,7 +52,7 @@ if not cors_origins:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_origin_regex=r"https?://.*\.agenciamidas\.com",
+    allow_origin_regex=r"https?://(.*\.)?(vertixbet\.site|agenciamidas\.com)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
