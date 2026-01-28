@@ -54,6 +54,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Atualizar saldo periodicamente quando usuário está logado
+  useEffect(() => {
+    if (!token || !user) return;
+
+    // Atualizar saldo a cada 10 segundos
+    const balanceInterval = setInterval(() => {
+      fetchUser(token);
+    }, 10000);
+
+    // Atualizar saldo quando a janela recebe foco (usuário volta para a aba)
+    const handleFocus = () => {
+      fetchUser(token);
+    };
+    window.addEventListener('focus', handleFocus);
+
+    // Atualizar saldo quando a página fica visível novamente
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchUser(token);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(balanceInterval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [token, user]);
+
   const fetchUser = async (authToken: string) => {
     try {
       const res = await fetch(`${API_URL}/api/auth/me`, {

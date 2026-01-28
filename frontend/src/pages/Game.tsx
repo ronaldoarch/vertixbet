@@ -9,7 +9,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 export default function Game() {
   const { gameCode } = useParams<{ gameCode: string }>();
   const navigate = useNavigate();
-  const { user, token, loading: authLoading } = useAuth();
+  const { user, token, loading: authLoading, refreshUser } = useAuth();
   const [gameUrl, setGameUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -121,16 +121,73 @@ export default function Game() {
 
       {/* Iframe do jogo */}
       {gameUrl && (
-        <div className="w-full h-[calc(100vh-60px)]">
-          <iframe
-            src={gameUrl}
-            className="w-full h-full border-0"
-            title="Jogo"
-            allow="fullscreen; autoplay; payment; geolocation"
-            allowFullScreen
-          />
-        </div>
+        <GameIframeWrapper 
+          gameUrl={gameUrl} 
+          token={token}
+          onBalanceUpdate={refreshUser}
+        />
       )}
+    </div>
+  );
+}
+
+// Componente wrapper para o iframe que atualiza saldo automaticamente
+function GameIframeWrapper({ 
+  gameUrl, 
+  token, 
+  onBalanceUpdate 
+}: { 
+  gameUrl: string; 
+  token: string | null;
+  onBalanceUpdate: () => void;
+}) {
+  useEffect(() => {
+    if (!token) return;
+
+    // Atualizar saldo quando a página recebe foco (usuário volta da aba do jogo)
+    const handleFocus = () => {
+      onBalanceUpdate();
+    };
+    window.addEventListener('focus', handleFocus);
+
+    // Atualizar saldo quando a página fica visível novamente
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        onBalanceUpdate();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Atualizar saldo periodicamente enquanto joga (a cada 5 segundos)
+    const balanceInterval = setInterval(() => {
+      onBalanceUpdate();
+    }, 5000);
+
+    // Atualizar saldo quando sai da página (antes de desmontar)
+    const handleBeforeUnload = () => {
+      onBalanceUpdate();
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      clearInterval(balanceInterval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      // Atualizar saldo uma última vez ao sair
+      onBalanceUpdate();
+    };
+  }, [token, onBalanceUpdate]);
+
+  return (
+    <div className="w-full h-[calc(100vh-60px)]">
+      <iframe
+        src={gameUrl}
+        className="w-full h-full border-0"
+        title="Jogo"
+        allow="fullscreen; autoplay; payment; geolocation"
+        allowFullScreen
+      />
     </div>
   );
 }
