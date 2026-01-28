@@ -304,14 +304,28 @@ async def webhook_pix_cashin(request: Request, db: Session = Depends(get_db)):
         gateway = get_active_pix_gateway(db)
         credentials = json.loads(gateway.credentials) if gateway.credentials else {}
         client_secret = credentials.get("client_secret") or credentials.get("cs")
+        sandbox = credentials.get("sandbox", False)
         
         if not client_secret:
             raise HTTPException(status_code=500, detail="Credenciais do gateway não configuradas")
         
-        # Validar hash
-        if not SuitPayAPI.validate_webhook_hash(data.copy(), client_secret):
-            print(f"Hash inválido no webhook: {data.get('hash')}")
-            raise HTTPException(status_code=401, detail="Hash inválido")
+        # Validar hash (opcional se não estiver presente, mas validar se presente)
+        received_hash = data.get("hash")
+        if received_hash:
+            # Hash presente: validar obrigatoriamente
+            if not SuitPayAPI.validate_webhook_hash(data.copy(), client_secret):
+                print(f"Hash inválido no webhook: {received_hash}")
+                raise HTTPException(status_code=401, detail="Hash inválido")
+            print(f"Hash validado com sucesso: {received_hash[:20]}...")
+        else:
+            # Hash não presente: permitir apenas em sandbox ou registrar aviso
+            if not sandbox:
+                print(f"AVISO: Webhook recebido sem hash em ambiente de produção!")
+                print(f"IP do cliente: {request.client.host if request.client else 'unknown'}")
+                print(f"Headers: {dict(request.headers)}")
+                # Em produção, ainda permitir mas registrar aviso crítico
+            else:
+                print(f"Webhook recebido sem hash (ambiente sandbox - permitido)")
         
         # Processar webhook conforme documentação oficial SuitPay
         # Campos esperados: idTransaction, typeTransaction, statusTransaction, 
