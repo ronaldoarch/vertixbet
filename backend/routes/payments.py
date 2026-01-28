@@ -100,8 +100,12 @@ async def create_pix_deposit(
     due_date = (datetime.utcnow() + timedelta(days=30)).strftime("%Y-%m-%d")
     
     # URL do webhook (usar variável de ambiente ou construir)
-    webhook_url = os.getenv("WEBHOOK_BASE_URL", "https://api.agenciamidas.com")
+    webhook_url = os.getenv("WEBHOOK_BASE_URL", "https://api.vertixbet.site")
     callback_url = f"{webhook_url}/api/webhooks/suitpay/pix-cashin"
+    
+    print(f"[DEPOSIT PIX] Criando depósito de R$ {request.amount} para usuário {user.id}")
+    print(f"[DEPOSIT PIX] Webhook URL configurada: {callback_url}")
+    print(f"[DEPOSIT PIX] Request Number: {request_number}")
     
     # Gerar código PIX conforme documentação oficial
     pix_response = await suitpay.generate_pix_payment(
@@ -148,6 +152,14 @@ async def create_pix_deposit(
     db.commit()
     db.refresh(deposit)
     
+    print(f"[DEPOSIT PIX] Depósito criado com sucesso:")
+    print(f"[DEPOSIT PIX] - ID: {deposit.id}")
+    print(f"[DEPOSIT PIX] - External ID: {deposit.external_id}")
+    print(f"[DEPOSIT PIX] - Status: {deposit.status}")
+    print(f"[DEPOSIT PIX] - Valor: R$ {deposit.amount}")
+    print(f"[DEPOSIT PIX] - Webhook será chamado em: {callback_url}")
+    print(f"[DEPOSIT PIX] - Aguardando webhook da SuitPay...")
+    
     return deposit
 
 
@@ -192,7 +204,7 @@ async def create_pix_withdrawal(
     suitpay = get_suitpay_client(gateway)
     
     # URL do webhook
-    webhook_url = os.getenv("WEBHOOK_BASE_URL", "https://api.agenciamidas.com")
+    webhook_url = os.getenv("WEBHOOK_BASE_URL", "https://api.vertixbet.site")
     callback_url = f"{webhook_url}/api/webhooks/suitpay/pix-cashout"
     
     # Gerar external_id único para controle de duplicidade
@@ -261,14 +273,32 @@ async def create_pix_withdrawal(
 
 # ========== WEBHOOKS ==========
 
+@webhook_router.get("/suitpay/pix-cashin")
+async def test_webhook_pix_cashin():
+    """Endpoint GET para testar se o webhook está acessível"""
+    return {
+        "status": "ok",
+        "message": "Webhook endpoint está acessível",
+        "endpoint": "/api/webhooks/suitpay/pix-cashin",
+        "method": "POST",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
 @webhook_router.post("/suitpay/pix-cashin")
 async def webhook_pix_cashin(request: Request, db: Session = Depends(get_db)):
     """
     Webhook para receber notificações de PIX Cash-in (depósitos) da SuitPay
     """
+    # Log inicial para capturar qualquer tentativa de chamada
+    print("=" * 80)
+    print(f"[WEBHOOK PIX-CASHIN] Requisição recebida em {datetime.utcnow().isoformat()}")
+    print(f"[WEBHOOK PIX-CASHIN] IP do cliente: {request.client.host if request.client else 'unknown'}")
+    print(f"[WEBHOOK PIX-CASHIN] Headers: {dict(request.headers)}")
+    
     try:
+        # Ler dados do webhook
         data = await request.json()
-        print(f"Webhook PIX Cash-in recebido: {data}")
+        print(f"[WEBHOOK PIX-CASHIN] Dados recebidos: {json.dumps(data, indent=2, default=str)}")
         
         # Buscar gateway PIX ativo para validar hash
         gateway = get_active_pix_gateway(db)
@@ -321,18 +351,23 @@ async def webhook_pix_cashin(request: Request, db: Session = Depends(get_db)):
                     print(f"Depósito encontrado por request_number: {deposit.id}")
                     break
         
-        # Se ainda não encontrou, tentar buscar por qualquer depósito pendente do usuário com valor correspondente
+        # Se ainda não encontrou, tentar buscar por qualquer depósito pendente com valor correspondente criado nas últimas 24 horas
         if not deposit and value:
             print(f"Tentando buscar por valor: {value}")
-            # Buscar todos os depósitos pendentes e verificar valor
+            from datetime import timedelta
+            # Buscar depósitos pendentes criados nas últimas 24 horas
+            time_threshold = datetime.utcnow() - timedelta(hours=24)
             all_pending = db.query(Deposit).filter(
-                Deposit.status == TransactionStatus.PENDING
-            ).all()
+                Deposit.status == TransactionStatus.PENDING,
+                Deposit.created_at >= time_threshold
+            ).order_by(Deposit.created_at.desc()).all()
+            
+            print(f"Encontrados {len(all_pending)} depósitos pendentes nas últimas 24h")
             for d in all_pending:
                 # Comparar valores com tolerância de 0.01 para diferenças de arredondamento
                 if abs(float(d.amount) - float(value)) < 0.01:
                     deposit = d
-                    print(f"Depósito encontrado por valor: {deposit.id}, valor: {deposit.amount}")
+                    print(f"Depósito encontrado por valor e data: {deposit.id}, valor: {deposit.amount}, criado em: {deposit.created_at}")
                     break
         
         if not deposit:
@@ -413,7 +448,11 @@ async def webhook_pix_cashin(request: Request, db: Session = Depends(get_db)):
         return {"status": "ok", "message": "Webhook processado com sucesso"}
     
     except Exception as e:
-        print(f"Erro ao processar webhook PIX Cash-in: {str(e)}")
+        import traceback
+        error_traceback = traceback.format_exc()
+        print(f"[WEBHOOK PIX-CASHIN] ERRO ao processar webhook: {str(e)}")
+        print(f"[WEBHOOK PIX-CASHIN] Traceback completo:\n{error_traceback}")
+        print("=" * 80)
         raise HTTPException(status_code=500, detail=f"Erro ao processar webhook: {str(e)}")
 
 

@@ -123,10 +123,15 @@ class SuitPayAPI:
         # Adicionar callbackUrl se fornecido
         if callback_url:
             payload["callbackUrl"] = callback_url
+            print(f"[SuitPayAPI] Webhook URL enviada para SuitPay: {callback_url}")
+        else:
+            print(f"[SuitPayAPI] ATENÇÃO: Nenhuma callbackUrl fornecida - webhook não será chamado!")
         
         # Adicionar usernameCheckout se fornecido
         if username_checkout:
             payload["usernameCheckout"] = username_checkout
+        
+        print(f"[SuitPayAPI] Payload enviado para SuitPay: {json.dumps(payload, indent=2, default=str)}")
         
         # Endpoint correto conforme documentação oficial SuitPay
         # POST /api/v1/gateway/request-qrcode
