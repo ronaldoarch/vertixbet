@@ -870,12 +870,12 @@ async def launch_game(
                     detail=f"Erro ao transferir saldo para IGameWin. {api.last_error or 'Erro desconhecido'}"
                 )
         elif balance_diff < 0:
-            # Saldo IGameWin maior, transferir diferença de volta (caso o jogador tenha ganhado)
-            transfer_result = await api.transfer_out(current_user.username, abs(balance_diff))
-            if transfer_result:
-                # Atualizar saldo local
-                current_user.balance = igamewin_balance
-                db.commit()
+            # Saldo IGameWin maior (usuário ganhou), apenas atualizar saldo local
+            # NÃO fazer transfer_out aqui - isso retiraria o dinheiro que o usuário ganhou!
+            # O saldo será sincronizado pelo webhook quando houver apostas
+            current_user.balance = igamewin_balance
+            db.commit()
+            print(f"[GAME LAUNCH] Saldo sincronizado: usuário {current_user.username} ganhou R$ {abs(balance_diff):.2f}")
     
     # Gerar URL de lançamento do jogo usando user_code (username)
     launch_url = await api.launch_game(
