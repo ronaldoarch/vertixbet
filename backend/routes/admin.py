@@ -674,9 +674,12 @@ async def public_games(
     priority_providers = {po.provider_code for po in provider_orders if po.is_priority}
     
     # Obter os 3 provedores prioritários ordenados por display_order
+    # Apenas os que têm is_priority=True, ordenados por display_order
     priority_provider_list = [
-        po.provider_code for po in provider_orders 
-        if po.is_priority
+        po.provider_code for po in sorted(
+            [po for po in provider_orders if po.is_priority],
+            key=lambda x: x.display_order
+        )
     ][:3]  # Apenas os 3 primeiros
     
     # Ordenar: primeiro os prioritários por display_order (1, 2, 3), depois os outros por ordem, depois os sem ordem
@@ -722,6 +725,8 @@ async def public_games(
         }
     
     # Se não há provider_code, busca jogos APENAS dos 3 provedores prioritários (para home)
+    # Limite: 15 jogos por provedor
+    GAMES_PER_PROVIDER = 15
     all_games = []
     
     # Filtrar apenas os 3 provedores prioritários
@@ -731,16 +736,17 @@ async def public_games(
         
         # Obter apenas os 3 provedores prioritários na ordem correta
         active_providers = []
-        for prov_code in priority_provider_list:
+        for prov_code in priority_provider_list[:3]:  # Garantir máximo de 3
             if prov_code in provider_code_map:
                 provider = provider_code_map[prov_code]
                 if str(provider.get("status", 1)) in ["1", "true", "True"]:
                     active_providers.append(provider)
     else:
-        # Fallback: se não há provedores prioritários configurados, usar todos
-        active_providers = [p for p in providers if str(p.get("status", 1)) in ["1", "true", "True"]] or providers
-        active_providers = sorted(active_providers, key=sort_providers)
+        # Fallback: se não há provedores prioritários configurados, não retornar jogos
+        # O admin deve configurar os provedores prioritários primeiro
+        active_providers = []
     
+    # Buscar jogos apenas dos provedores prioritários (máximo 3)
     for provider in active_providers:
         prov_code = provider.get("code") or provider.get("provider_code")
         if not prov_code:
@@ -752,11 +758,17 @@ async def public_games(
         
         games = _normalize_games(games, prov_code)
         
+        # Limitar a 15 jogos por provedor
+        games_count = 0
         for g in games:
+            if games_count >= GAMES_PER_PROVIDER:
+                break
+                
             status_val = g.get("status")
             is_active = (status_val == 1) or (status_val is True) or (str(status_val).lower() == "active")
             if not is_active:
                 continue
+                
             all_games.append({
                 "name": g.get("game_name") or g.get("name") or g.get("title") or g.get("gameTitle"),
                 "code": g.get("game_code") or g.get("code") or g.get("game_id") or g.get("id") or g.get("slug"),
@@ -764,6 +776,7 @@ async def public_games(
                 "banner": g.get("banner") or g.get("image") or g.get("icon"),
                 "status": "active"
             })
+            games_count += 1
 
     return {
         "providers": providers,
