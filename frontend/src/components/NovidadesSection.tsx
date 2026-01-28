@@ -62,13 +62,20 @@ export default function NovidadesSection({ filters, onProvidersLoaded }: Novidad
         }));
         setGames(mapped);
         if (!providersLoadedRef.current) {
-          const uniqueProviders = Array.from(
-            new Set(
-              mapped
-                .map((g) => g.provider?.trim())
-                .filter((p): p is string => Boolean(p))
-            )
-          ).sort((a, b) => a.localeCompare(b));
+          // Manter a ordem dos provedores como retornado pelo backend (já ordenado)
+          // O backend retorna apenas os 3 provedores prioritários na ordem correta
+          const providerSet = new Set<string>();
+          const uniqueProviders: string[] = [];
+          
+          // Percorrer os jogos na ordem que vieram (que já está ordenada por provedor)
+          for (const game of mapped) {
+            const provider = game.provider?.trim();
+            if (provider && !providerSet.has(provider)) {
+              providerSet.add(provider);
+              uniqueProviders.push(provider);
+            }
+          }
+          
           onProvidersLoaded?.(uniqueProviders);
           providersLoadedRef.current = true;
         }
@@ -115,18 +122,40 @@ export default function NovidadesSection({ filters, onProvidersLoaded }: Novidad
   const displayedGames = filteredGames.slice(currentIndex, currentIndex + gamesPerPage);
 
   const gamesByProvider = useMemo(() => {
-    return filteredGames.reduce<Record<string, Game[]>>((acc, game) => {
+    // Agrupar jogos por provedor mantendo a ordem de aparição dos provedores
+    const result: Record<string, Game[]> = {};
+    const providerOrder: string[] = [];
+    
+    for (const game of filteredGames) {
       const key = (game.provider || 'Outros').trim() || 'Outros';
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(game);
-      return acc;
-    }, {});
+      if (!result[key]) {
+        result[key] = [];
+        providerOrder.push(key);
+      }
+      result[key].push(game);
+    }
+    
+    return result;
   }, [filteredGames]);
 
-  const providerEntries = useMemo(
-    () => Object.entries(gamesByProvider).sort((a, b) => a[0].localeCompare(b[0])),
-    [gamesByProvider]
-  );
+  const providerEntries = useMemo(() => {
+    // Manter a ordem dos provedores conforme aparecem nos jogos (já ordenada pelo backend)
+    // Criar um array de entradas mantendo a ordem de primeira aparição
+    const providerOrder: string[] = [];
+    const seenProviders = new Set<string>();
+    
+    // Percorrer os jogos filtrados para determinar a ordem dos provedores
+    for (const game of filteredGames) {
+      const provider = (game.provider || 'Outros').trim() || 'Outros';
+      if (!seenProviders.has(provider)) {
+        seenProviders.add(provider);
+        providerOrder.push(provider);
+      }
+    }
+    
+    // Criar as entradas na ordem correta
+    return providerOrder.map(provider => [provider, gamesByProvider[provider] || []] as [string, Game[]]);
+  }, [gamesByProvider, filteredGames]);
 
   const renderGameCard = (game: Game) => (
     <a

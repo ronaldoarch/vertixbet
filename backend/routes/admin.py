@@ -669,16 +669,26 @@ async def public_games(
         )
     
     # Ordenar provedores pela ordem definida no banco
-    provider_orders = db.query(ProviderOrder).all()
+    provider_orders = db.query(ProviderOrder).order_by(ProviderOrder.display_order.asc()).all()
     order_map = {po.provider_code: po.display_order for po in provider_orders}
     priority_providers = {po.provider_code for po in provider_orders if po.is_priority}
     
-    # Ordenar: primeiro os prioritários (1, 2, 3), depois os outros por ordem, depois os sem ordem
+    # Obter os 3 provedores prioritários ordenados por display_order
+    priority_provider_list = [
+        po.provider_code for po in provider_orders 
+        if po.is_priority
+    ][:3]  # Apenas os 3 primeiros
+    
+    # Ordenar: primeiro os prioritários por display_order (1, 2, 3), depois os outros por ordem, depois os sem ordem
     def sort_providers(p):
         code = p.get("code") or p.get("provider_code") or ""
         is_priority = code in priority_providers
         order = order_map.get(code, 999)
-        return (not is_priority, order if not is_priority else 0, code)
+        # Se é prioritário, usar o display_order diretamente para manter ordem 1, 2, 3
+        if is_priority:
+            priority_index = priority_provider_list.index(code) if code in priority_provider_list else 999
+            return (0, priority_index, code)
+        return (1, order, code)
     
     providers = sorted(providers, key=sort_providers)
     
@@ -711,12 +721,25 @@ async def public_games(
             "games": public_games
         }
     
-    # Se não há provider_code, busca jogos de TODOS os provedores
+    # Se não há provider_code, busca jogos APENAS dos 3 provedores prioritários (para home)
     all_games = []
-    active_providers = [p for p in providers if str(p.get("status", 1)) in ["1", "true", "True"]] or providers
     
-    # Ordenar provedores pela ordem definida no banco (já ordenado acima, mas garantir)
-    active_providers = sorted(active_providers, key=sort_providers)
+    # Filtrar apenas os 3 provedores prioritários
+    if priority_provider_list:
+        # Criar um mapa de códigos para facilitar busca
+        provider_code_map = {p.get("code") or p.get("provider_code"): p for p in providers}
+        
+        # Obter apenas os 3 provedores prioritários na ordem correta
+        active_providers = []
+        for prov_code in priority_provider_list:
+            if prov_code in provider_code_map:
+                provider = provider_code_map[prov_code]
+                if str(provider.get("status", 1)) in ["1", "true", "True"]:
+                    active_providers.append(provider)
+    else:
+        # Fallback: se não há provedores prioritários configurados, usar todos
+        active_providers = [p for p in providers if str(p.get("status", 1)) in ["1", "true", "True"]] or providers
+        active_providers = sorted(active_providers, key=sort_providers)
     
     for provider in active_providers:
         prov_code = provider.get("code") or provider.get("provider_code")
