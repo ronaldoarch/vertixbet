@@ -11,11 +11,13 @@ class IGameWinAPI:
         agent_code: str,
         agent_key: str,
         api_url: str = "https://igamewin.com",
-        credentials: Optional[Dict[str, Any]] = None
+        credentials: Optional[Dict[str, Any]] = None,
+        rtp: float = 96.0,
     ):
         self.agent_code = agent_code
         self.agent_key = agent_key  # maps to agent_token in requests
         self.api_url = api_url.rstrip('/')
+        self.rtp = rtp
         # Detect base url for /api/v1 according to doc
         if self.api_url.endswith("/api/v1"):
             self.base_url = self.api_url
@@ -200,6 +202,9 @@ class IGameWinAPI:
         }
         if provider_code:
             payload["provider_code"] = provider_code
+        # RTP do agente (se a API do provedor aceitar, envia para configurar o jogo)
+        if getattr(self, "rtp", None) is not None and 0 <= self.rtp <= 100:
+            payload["rtp"] = self.rtp
         
         data = await self._post(payload)
         if not data:
@@ -229,9 +234,13 @@ def get_igamewin_api(db: Session) -> Optional[IGameWinAPI]:
             credentials_dict = json.loads(agent.credentials)
         except Exception:
             credentials_dict = {}
+    rtp = getattr(agent, "rtp", 96.0)
+    if rtp is None:
+        rtp = 96.0
     return IGameWinAPI(
         agent_code=agent.agent_code,
         agent_key=agent.agent_key,
         api_url=agent.api_url,
-        credentials=credentials_dict
+        credentials=credentials_dict,
+        rtp=float(rtp),
     )

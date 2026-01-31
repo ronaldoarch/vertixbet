@@ -14,6 +14,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+    affiliate_code: Optional[str] = None  # ref= no link de afiliado (?ref=CODIGO)
 
 
 class UserUpdate(BaseModel):
@@ -84,6 +85,7 @@ class IGameWinAgentBase(BaseModel):
     agent_key: str
     api_url: str = "https://api.igamewin.com"
     is_active: bool = True
+    rtp: float = 96.0  # RTP do agente em % (ex: 96 = 96%)
     credentials: Optional[str] = None
 
 
@@ -96,6 +98,7 @@ class IGameWinAgentUpdate(BaseModel):
     agent_key: Optional[str] = None
     api_url: Optional[str] = None
     is_active: Optional[bool] = None
+    rtp: Optional[float] = None
     credentials: Optional[str] = None
 
 
@@ -127,6 +130,7 @@ class DepositPixRequest(BaseModel):
     payer_tax_id: str
     payer_email: str
     payer_phone: Optional[str] = None
+    coupon_code: Optional[str] = None
 
 
 class DepositUpdate(BaseModel):
@@ -216,7 +220,8 @@ class FTDResponse(FTDBase):
 # FTD Settings Schemas
 class FTDSettingsBase(BaseModel):
     pass_rate: float = 0.0
-    min_amount: float = 0.0
+    min_amount: float = 2.0  # Depósito mínimo (R$)
+    min_withdrawal: float = 10.0  # Saque mínimo (R$)
     is_active: bool = True
 
 
@@ -230,6 +235,43 @@ class FTDSettingsUpdate(FTDSettingsBase):
 
 class FTDSettingsResponse(FTDSettingsBase):
     id: int
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+# Coupon Schemas
+class CouponBase(BaseModel):
+    code: str
+    discount_type: str = "percent"  # percent | fixed
+    discount_value: float = 0.0
+    min_deposit: float = 0.0
+    max_uses: int = 0  # 0 = ilimitado
+    valid_from: Optional[datetime] = None
+    valid_until: Optional[datetime] = None
+    is_active: bool = True
+
+
+class CouponCreate(CouponBase):
+    pass
+
+
+class CouponUpdate(BaseModel):
+    code: Optional[str] = None
+    discount_type: Optional[str] = None
+    discount_value: Optional[float] = None
+    min_deposit: Optional[float] = None
+    max_uses: Optional[int] = None
+    valid_from: Optional[datetime] = None
+    valid_until: Optional[datetime] = None
+    is_active: Optional[bool] = None
+
+
+class CouponResponse(CouponBase):
+    id: int
+    used_count: int = 0
     created_at: datetime
     updated_at: datetime
     

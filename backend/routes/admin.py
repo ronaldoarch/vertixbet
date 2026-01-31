@@ -12,7 +12,7 @@ from dependencies import get_current_admin_user, get_current_user
 from models import (
     User, Deposit, Withdrawal, FTD, Gateway, IGameWinAgent, FTDSettings,
     TransactionStatus, UserRole, Bet, BetStatus, Notification, NotificationType,
-    Affiliate, Theme, ProviderOrder, TrackingConfig, SiteSettings
+    Affiliate, Theme, ProviderOrder, TrackingConfig, SiteSettings, Coupon, CouponType
 )
 from schemas import (
     UserResponse, UserCreate, UserUpdate,
@@ -26,7 +26,8 @@ from schemas import (
     ThemeResponse, ThemeCreate, ThemeUpdate,
     ProviderOrderResponse, ProviderOrderCreate, ProviderOrderUpdate,
     TrackingConfigResponse, TrackingConfigCreate, TrackingConfigUpdate,
-    SiteSettingsResponse, SiteSettingsCreate, SiteSettingsUpdate
+    SiteSettingsResponse, SiteSettingsCreate, SiteSettingsUpdate,
+    CouponResponse, CouponCreate, CouponUpdate
 )
 from auth import get_password_hash
 from igamewin_api import get_igamewin_api
@@ -368,7 +369,7 @@ async def get_ftd_settings(
     settings = db.query(FTDSettings).filter(FTDSettings.is_active == True).first()
     if not settings:
         # Create default settings
-        settings = FTDSettings(pass_rate=0.0, min_amount=0.0, is_active=True)
+        settings = FTDSettings(pass_rate=0.0, min_amount=2.0, min_withdrawal=10.0, is_active=True)
         db.add(settings)
         db.commit()
         db.refresh(settings)
@@ -393,6 +394,83 @@ async def update_ftd_settings(
     db.commit()
     db.refresh(settings)
     return settings
+
+
+# ========== COUPONS ==========
+@router.get("/coupons", response_model=List[CouponResponse])
+async def get_coupons(
+    is_active: Optional[bool] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    q = db.query(Coupon)
+    if is_active is not None:
+        q = q.filter(Coupon.is_active == is_active)
+    return q.order_by(Coupon.id.desc()).all()
+
+
+@router.post("/coupons", response_model=CouponResponse, status_code=status.HTTP_201_CREATED)
+async def create_coupon(
+    data: CouponCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    code = (data.code or "").strip().upper()
+    if not code:
+        raise HTTPException(status_code=400, detail="Código do cupom é obrigatório")
+    existing = db.query(Coupon).filter(Coupon.code == code).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Já existe um cupom com este código")
+    discount_type = CouponType.PERCENT if (data.discount_type or "percent") == "percent" else CouponType.FIXED
+    coupon = Coupon(
+        code=code,
+        discount_type=discount_type,
+        discount_value=data.discount_value,
+        min_deposit=data.min_deposit,
+        max_uses=data.max_uses or 0,
+        valid_from=data.valid_from,
+        valid_until=data.valid_until,
+        is_active=data.is_active,
+    )
+    db.add(coupon)
+    db.commit()
+    db.refresh(coupon)
+    return coupon
+
+
+@router.put("/coupons/{coupon_id}", response_model=CouponResponse)
+async def update_coupon(
+    coupon_id: int,
+    data: CouponUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    coupon = db.query(Coupon).filter(Coupon.id == coupon_id).first()
+    if not coupon:
+        raise HTTPException(status_code=404, detail="Cupom não encontrado")
+    update_data = data.model_dump(exclude_unset=True)
+    if "code" in update_data and update_data["code"]:
+        update_data["code"] = update_data["code"].strip().upper()
+    if "discount_type" in update_data:
+        update_data["discount_type"] = CouponType.PERCENT if update_data["discount_type"] == "percent" else CouponType.FIXED
+    for k, v in update_data.items():
+        setattr(coupon, k, v)
+    db.commit()
+    db.refresh(coupon)
+    return coupon
+
+
+@router.delete("/coupons/{coupon_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_coupon(
+    coupon_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    coupon = db.query(Coupon).filter(Coupon.id == coupon_id).first()
+    if not coupon:
+        raise HTTPException(status_code=404, detail="Cupom não encontrado")
+    db.delete(coupon)
+    db.commit()
 
 
 # ========== GATEWAYS ==========
@@ -1857,6 +1935,19 @@ async def delete_site_setting(
     
     db.delete(setting)
     db.commit()
+
+
+# ========== PUBLIC MINIMUMS (depósito/saque) ==========
+@public_router.get("/minimums")
+async def get_minimums(db: Session = Depends(get_db)):
+    """Retorna depósito mínimo e saque mínimo (público, para validação no frontend)."""
+    settings = db.query(FTDSettings).filter(FTDSettings.is_active == True).first()
+    if not settings:
+        return {"min_deposit": 2.0, "min_withdrawal": 10.0}
+    return {
+        "min_deposit": getattr(settings, "min_amount", 2.0),
+        "min_withdrawal": getattr(settings, "min_withdrawal", 10.0),
+    }
 
 
 # ========== PUBLIC SITE SETTINGS ==========

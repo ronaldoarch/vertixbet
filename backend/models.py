@@ -33,16 +33,17 @@ class User(Base):
     balance = Column(Float, default=0.0, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
+    referred_by_affiliate_id = Column(Integer, ForeignKey("affiliates.id"), nullable=True, index=True)  # Afiliado que indicou
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relationships
+    # Relationships (primaryjoin: conta de afiliado do usuário = Affiliate.user_id == User.id)
     deposits = relationship("Deposit", back_populates="user")
     withdrawals = relationship("Withdrawal", back_populates="user")
     ftds = relationship("FTD", back_populates="user")
     bets = relationship("Bet", back_populates="user")
     notifications = relationship("Notification", back_populates="user")
-    affiliate = relationship("Affiliate", back_populates="user", uselist=False)
+    affiliate = relationship("Affiliate", back_populates="user", uselist=False, primaryjoin="User.id==Affiliate.user_id")
 
 
 class Gateway(Base):
@@ -65,6 +66,7 @@ class IGameWinAgent(Base):
     agent_key = Column(String(255), nullable=False)
     api_url = Column(String(255), default="https://api.igamewin.com", nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
+    rtp = Column(Float, default=96.0, nullable=False)  # RTP do agente em % (ex: 96 = 96%)
     credentials = Column(Text)  # JSON string with additional credentials
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -129,8 +131,9 @@ class FTDSettings(Base):
     __tablename__ = "ftd_settings"
     
     id = Column(Integer, primary_key=True, index=True)
-    pass_rate = Column(Float, default=0.0, nullable=False)  # Taxa de passagem padrão
-    min_amount = Column(Float, default=0.0, nullable=False)
+    pass_rate = Column(Float, default=0.0, nullable=False)  # Taxa de passagem (interno)
+    min_amount = Column(Float, default=2.0, nullable=False)  # Depósito mínimo (R$)
+    min_withdrawal = Column(Float, default=10.0, nullable=False)  # Saque mínimo (R$)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -229,8 +232,8 @@ class Affiliate(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relationships
-    user = relationship("User", back_populates="affiliate")
+    # Relationships (foreign_keys: dono da conta afiliado; desambigua de User.referred_by_affiliate_id)
+    user = relationship("User", back_populates="affiliate", foreign_keys=[user_id])
 
 
 class Theme(Base):
@@ -289,5 +292,27 @@ class SiteSettings(Base):
     key = Column(String(100), unique=True, nullable=False, index=True)  # Ex: "support_phone", "support_email", etc
     value = Column(Text, nullable=True)  # Valor da configuração
     description = Column(String(255))  # Descrição do que é essa configuração
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class CouponType(str, enum.Enum):
+    PERCENT = "percent"
+    FIXED = "fixed"
+
+
+class Coupon(Base):
+    __tablename__ = "coupons"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(50), unique=True, index=True, nullable=False)
+    discount_type = Column(Enum(CouponType), default=CouponType.PERCENT, nullable=False)
+    discount_value = Column(Float, nullable=False)  # % ou R$
+    min_deposit = Column(Float, default=0.0, nullable=False)  # Depósito mínimo para usar
+    max_uses = Column(Integer, default=0, nullable=False)  # 0 = ilimitado
+    used_count = Column(Integer, default=0, nullable=False)
+    valid_from = Column(DateTime, nullable=True)
+    valid_until = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

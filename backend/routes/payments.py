@@ -5,12 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from typing import Optional
 from database import get_db
-from models import User, Deposit, Withdrawal, Gateway, TransactionStatus, Bet, BetStatus, Affiliate
+from sqlalchemy import func
+from models import User, Deposit, Withdrawal, Gateway, TransactionStatus, Bet, BetStatus, Affiliate, FTDSettings, FTD, Coupon, CouponType
 from suitpay_api import SuitPayAPI
 from schemas import DepositResponse, WithdrawalResponse, DepositPixRequest, WithdrawalPixRequest, AffiliateResponse
 from dependencies import get_current_user
 from igamewin_api import get_igamewin_api
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time as dt_time
 import json
 import uuid
 import os
@@ -36,6 +37,35 @@ def get_active_pix_gateway(db: Session) -> Gateway:
     return gateway
 
 
+def validate_coupon_for_deposit(db: Session, code: str, amount: float) -> tuple[Optional[int], float, Optional[str]]:
+    """
+    Valida cupom para um depósito. Retorna (coupon_id, bonus_amount, error_message).
+    Se error_message não for None, cupom é inválido.
+    """
+    if not code or not code.strip():
+        return None, 0.0, None
+    coupon = db.query(Coupon).filter(Coupon.code == code.strip().upper(), Coupon.is_active == True).first()
+    if not coupon:
+        return None, 0.0, "Cupom não encontrado ou inativo."
+    from datetime import datetime as dt
+    now = dt.utcnow()
+    if coupon.valid_from and now < coupon.valid_from:
+        return None, 0.0, "Cupom ainda não está válido."
+    if coupon.valid_until and now > coupon.valid_until:
+        return None, 0.0, "Cupom expirado."
+    if coupon.min_deposit and amount < coupon.min_deposit:
+        return None, 0.0, f"Depósito mínimo para este cupom é R$ {coupon.min_deposit:.2f}".replace(".", ",")
+    if coupon.max_uses and coupon.max_uses > 0 and (coupon.used_count or 0) >= coupon.max_uses:
+        return None, 0.0, "Cupom já atingiu o limite de usos."
+    if coupon.discount_type == CouponType.PERCENT:
+        bonus = round(amount * (coupon.discount_value / 100.0), 2)
+    else:
+        bonus = round(float(coupon.discount_value), 2)
+    if bonus <= 0:
+        return None, 0.0, None
+    return coupon.id, bonus, None
+
+
 def get_suitpay_client(gateway: Gateway) -> SuitPayAPI:
     """Cria cliente SuitPay a partir das credenciais do gateway"""
     try:
@@ -58,6 +88,26 @@ def get_suitpay_client(gateway: Gateway) -> SuitPayAPI:
         )
 
 
+@router.get("/validate-coupon")
+async def validate_coupon_public(
+    code: str,
+    amount: float,
+    db: Session = Depends(get_db),
+):
+    """
+    Valida cupom para um valor de depósito. Retorna se é válido e o bônus em R$.
+    Não requer autenticação (para exibir bônus antes do usuário enviar o depósito).
+    """
+    if not code or not code.strip() or amount <= 0:
+        return {"valid": False, "bonus_amount": 0, "message": "Código ou valor inválido."}
+    coupon_id, bonus_amount, err = validate_coupon_for_deposit(db, code.strip(), amount)
+    if err:
+        return {"valid": False, "bonus_amount": 0, "message": err}
+    if coupon_id is None or bonus_amount <= 0:
+        return {"valid": False, "bonus_amount": 0, "message": "Cupom não aplicável a este valor."}
+    return {"valid": True, "bonus_amount": round(bonus_amount, 2), "message": None}
+
+
 @router.post("/deposit/pix", response_model=DepositResponse, status_code=status.HTTP_201_CREATED)
 async def create_pix_deposit(
     request: DepositPixRequest,
@@ -76,9 +126,24 @@ async def create_pix_deposit(
     
     if request.amount <= 0:
         raise HTTPException(status_code=400, detail="Valor deve ser maior que zero")
-    
-    if request.amount < 2:
-        raise HTTPException(status_code=400, detail="Valor mínimo de depósito é R$ 2,00")
+
+    coupon_id: Optional[int] = None
+    bonus_amount: float = 0.0
+    if request.coupon_code and request.coupon_code.strip():
+        cid, bonus, err = validate_coupon_for_deposit(db, request.coupon_code.strip(), request.amount)
+        if err:
+            raise HTTPException(status_code=400, detail=err)
+        if cid is not None and bonus > 0:
+            coupon_id = cid
+            bonus_amount = bonus
+
+    settings = db.query(FTDSettings).filter(FTDSettings.is_active == True).first()
+    min_deposit = getattr(settings, "min_amount", 2.0) if settings else 2.0
+    if request.amount < min_deposit:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Valor mínimo de depósito é R$ {min_deposit:.2f}".replace(".", ","),
+        )
     
     # Validar CPF/CNPJ (não pode estar vazio conforme SuitPay)
     if not request.payer_tax_id or not request.payer_tax_id.strip():
@@ -132,7 +197,16 @@ async def create_pix_deposit(
             detail=f"Resposta inválida do gateway SuitPay. Campo 'paymentCode' não encontrado. Resposta: {pix_response}"
         )
     
-    # Criar registro de depósito
+    metadata = {
+        "pix_code": pix_response.get("paymentCode"),
+        "pix_qr_code_base64": pix_response.get("paymentCodeBase64"),
+        "request_number": request_number,
+        "suitpay_response": pix_response
+    }
+    if coupon_id is not None and bonus_amount > 0:
+        metadata["coupon_id"] = coupon_id
+        metadata["coupon_code"] = request.coupon_code.strip().upper()
+        metadata["bonus_amount"] = bonus_amount
     deposit = Deposit(
         user_id=user.id,
         gateway_id=gateway.id,
@@ -140,12 +214,7 @@ async def create_pix_deposit(
         status=TransactionStatus.PENDING,
         transaction_id=str(uuid.uuid4()),
         external_id=pix_response.get("idTransaction") or request_number,
-        metadata_json=json.dumps({
-            "pix_code": pix_response.get("paymentCode"),
-            "pix_qr_code_base64": pix_response.get("paymentCodeBase64"),
-            "request_number": request_number,
-            "suitpay_response": pix_response
-        })
+        metadata_json=json.dumps(metadata)
     )
     
     db.add(deposit)
@@ -188,6 +257,14 @@ async def create_pix_withdrawal(
     
     if request.amount <= 0:
         raise HTTPException(status_code=400, detail="Valor deve ser maior que zero")
+    
+    settings = db.query(FTDSettings).filter(FTDSettings.is_active == True).first()
+    min_withdrawal = getattr(settings, "min_withdrawal", 10.0) if settings else 10.0
+    if request.amount < min_withdrawal:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Valor mínimo de saque é R$ {min_withdrawal:.2f}".replace(".", ","),
+        )
     
     # Validar tipo de chave
     valid_key_types = ["document", "phoneNumber", "email", "randomKey", "paymentCode"]
@@ -414,10 +491,17 @@ async def webhook_pix_cashin(request: Request, db: Session = Depends(get_db)):
                 print(f"Aprovando depósito {deposit.id}")
                 saldo_anterior = None
                 user = db.query(User).filter(User.id == deposit.user_id).first()
+                bonus_to_credit = 0.0
+                dep_meta = json.loads(deposit.metadata_json) if deposit.metadata_json else {}
+                if dep_meta.get("coupon_id") and dep_meta.get("bonus_amount"):
+                    bonus_to_credit = float(dep_meta["bonus_amount"])
+                    coupon = db.query(Coupon).filter(Coupon.id == dep_meta["coupon_id"]).first()
+                    if coupon:
+                        coupon.used_count = (coupon.used_count or 0) + 1
                 if user:
                     saldo_anterior = user.balance
-                    user.balance += deposit.amount
-                    print(f"Saldo anterior: {saldo_anterior}, Valor creditado: {deposit.amount}, Novo saldo: {user.balance}")
+                    user.balance += deposit.amount + bonus_to_credit
+                    print(f"Saldo anterior: {saldo_anterior}, Valor creditado: {deposit.amount} + bônus: {bonus_to_credit}, Novo saldo: {user.balance}")
                 else:
                     print(f"ERRO: Usuário {deposit.user_id} não encontrado!")
                 
@@ -428,11 +512,17 @@ async def webhook_pix_cashin(request: Request, db: Session = Depends(get_db)):
         elif status_transaction_upper == "CHARGEBACK":
             print(f"CHARGEBACK detectado para depósito {deposit.id}")
             if deposit.status == TransactionStatus.APPROVED:
-                # Reverter saldo se já foi aprovado
+                dep_meta = json.loads(deposit.metadata_json) if deposit.metadata_json else {}
+                bonus_to_revert = float(dep_meta.get("bonus_amount") or 0)
+                total_to_revert = deposit.amount + bonus_to_revert
                 user = db.query(User).filter(User.id == deposit.user_id).first()
-                if user and user.balance >= deposit.amount:
-                    user.balance -= deposit.amount
+                if user and user.balance >= total_to_revert:
+                    user.balance -= total_to_revert
                     print(f"Saldo revertido: {user.balance}")
+                if dep_meta.get("coupon_id"):
+                    coupon = db.query(Coupon).filter(Coupon.id == dep_meta["coupon_id"]).first()
+                    if coupon and (coupon.used_count or 0) > 0:
+                        coupon.used_count -= 1
             deposit.status = TransactionStatus.CANCELLED
         else:
             print(f"Status desconhecido ou não processado: {status_transaction}")
@@ -640,10 +730,6 @@ async def get_affiliate_stats(
     if not affiliate:
         raise HTTPException(status_code=404, detail="Você não é um afiliado")
     
-    # Buscar usuários referenciados por este afiliado (via affiliate_code no metadata)
-    # Isso depende de como você armazena a referência do afiliado nos usuários
-    # Por enquanto, retornamos os dados do afiliado
-    
     return {
         "affiliate_code": affiliate.affiliate_code,
         "cpa_amount": affiliate.cpa_amount,
@@ -654,4 +740,105 @@ async def get_affiliate_stats(
         "total_referrals": affiliate.total_referrals,
         "total_deposits": affiliate.total_deposits,
         "is_active": affiliate.is_active
+    }
+
+
+def _affiliate_period_bounds(period: str):
+    """Retorna (start_dt, end_dt) em UTC para o período. end_dt é inclusive (fim do dia)."""
+    now = datetime.utcnow()
+    today = now.date()
+    if period == "this_week":
+        start_dt = datetime.combine(today - timedelta(days=today.weekday()), dt_time(0, 0, 0))
+        end_dt = datetime.combine(today, now.time()) if now.date() == today else datetime.combine(today, dt_time(23, 59, 59))
+    elif period == "last_week":
+        start_dt = datetime.combine(today - timedelta(days=today.weekday() + 7), dt_time(0, 0, 0))
+        end_dt = datetime.combine(today - timedelta(days=today.weekday() + 1), dt_time(23, 59, 59))
+    elif period == "this_month":
+        start_dt = datetime.combine(today.replace(day=1), dt_time(0, 0, 0))
+        end_dt = now
+    elif period == "last_month":
+        first_this = today.replace(day=1)
+        last_month_end = first_this - timedelta(days=1)
+        first_last = last_month_end.replace(day=1)
+        start_dt = datetime.combine(first_last, dt_time(0, 0, 0))
+        end_dt = datetime.combine(last_month_end, dt_time(23, 59, 59))
+    else:
+        start_dt = datetime.combine(today - timedelta(days=7), dt_time(0, 0, 0))
+        end_dt = now
+    return start_dt, end_dt
+
+
+@affiliate_router.get("/meus-dados")
+async def get_affiliate_meus_dados(
+    period: str = "this_week",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Métricas do afiliado por período (novos subordinados, depósitos, FTDs, saques, etc.)."""
+    affiliate = db.query(Affiliate).filter(Affiliate.user_id == current_user.id).first()
+    if not affiliate:
+        raise HTTPException(status_code=404, detail="Você não é um afiliado")
+    
+    start_dt, end_dt = _affiliate_period_bounds(period)
+    
+    # Usuários indicados por este afiliado no período (cadastrados no período)
+    new_referrals = db.query(User).filter(
+        User.referred_by_affiliate_id == affiliate.id,
+        User.created_at >= start_dt,
+        User.created_at <= end_dt
+    ).count()
+    
+    # Depósitos aprovados dos indicados no período
+    deposits_q = db.query(func.coalesce(func.sum(Deposit.amount), 0)).join(User).filter(
+        User.referred_by_affiliate_id == affiliate.id,
+        Deposit.status == TransactionStatus.APPROVED,
+        Deposit.created_at >= start_dt,
+        Deposit.created_at <= end_dt
+    )
+    total_deposits_period = deposits_q.scalar() or 0
+    deposits_count = db.query(Deposit).join(User).filter(
+        User.referred_by_affiliate_id == affiliate.id,
+        Deposit.status == TransactionStatus.APPROVED,
+        Deposit.created_at >= start_dt,
+        Deposit.created_at <= end_dt
+    ).count()
+    
+    # FTDs (primeiros depósitos) dos indicados no período
+    ftds_count = db.query(FTD).join(User).filter(
+        User.referred_by_affiliate_id == affiliate.id,
+        FTD.created_at >= start_dt,
+        FTD.created_at <= end_dt
+    ).count()
+    ftds_amount = db.query(func.coalesce(func.sum(FTD.amount), 0)).join(User).filter(
+        User.referred_by_affiliate_id == affiliate.id,
+        FTD.created_at >= start_dt,
+        FTD.created_at <= end_dt
+    ).scalar() or 0
+    
+    # Saques aprovados dos indicados no período
+    withdrawals_q = db.query(func.coalesce(func.sum(Withdrawal.amount), 0)).join(User).filter(
+        User.referred_by_affiliate_id == affiliate.id,
+        Withdrawal.status == TransactionStatus.APPROVED,
+        Withdrawal.created_at >= start_dt,
+        Withdrawal.created_at <= end_dt
+    )
+    total_withdrawals_period = withdrawals_q.scalar() or 0
+    withdrawals_count = db.query(Withdrawal).join(User).filter(
+        User.referred_by_affiliate_id == affiliate.id,
+        Withdrawal.status == TransactionStatus.APPROVED,
+        Withdrawal.created_at >= start_dt,
+        Withdrawal.created_at <= end_dt
+    ).count()
+    
+    return {
+        "period": period,
+        "start": start_dt.isoformat(),
+        "end": end_dt.isoformat(),
+        "new_referrals": new_referrals,
+        "deposits_count": deposits_count,
+        "deposits_total": round(total_deposits_period, 2),
+        "ftds_count": ftds_count,
+        "ftds_amount": round(ftds_amount, 2),
+        "withdrawals_count": withdrawals_count,
+        "withdrawals_total": round(total_withdrawals_period, 2),
     }

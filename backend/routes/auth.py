@@ -8,7 +8,7 @@ from database import get_db
 from schemas import LoginRequest, Token, UserResponse, UserCreate
 from auth import authenticate_user, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_password_hash, get_user_by_username
 from dependencies import get_current_user
-from models import User, UserRole
+from models import User, UserRole, Affiliate
 from collections import defaultdict
 from datetime import datetime, timedelta
 import threading
@@ -69,7 +69,14 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
             detail="Email already registered"
         )
     
-    # Criar novo usuário
+    # Afiliado: vincular ao afiliado se veio com ref (?ref=CODIGO)
+    referred_by_affiliate_id = None
+    if getattr(user_data, "affiliate_code", None) and str(user_data.affiliate_code).strip():
+        aff = db.query(Affiliate).filter(Affiliate.affiliate_code == str(user_data.affiliate_code).strip().upper()).first()
+        if aff and aff.is_active:
+            referred_by_affiliate_id = aff.id
+            aff.total_referrals = (aff.total_referrals or 0) + 1
+
     new_user = User(
         username=user_data.username,
         email=user_data.email,
@@ -79,13 +86,13 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
         role=UserRole.USER,
         balance=0.0,
         is_active=True,
-        is_verified=True  # Auto-aprovar novos cadastros
+        is_verified=True,
+        referred_by_affiliate_id=referred_by_affiliate_id,
     )
-    
+
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    
     return new_user
 
 

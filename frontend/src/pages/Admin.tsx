@@ -4,9 +4,9 @@ import {
   Users, DollarSign, TrendingUp, Settings, 
   LogOut, Menu, X, CreditCard, ArrowUpCircle, 
   ArrowDownCircle, Activity, RefreshCw,
-  Image as ImageIcon, Home, BarChart3,
+  Image as ImageIcon, Home,
   ChevronUp, ChevronDown, Percent, FileText, 
-  Gift, ShoppingBag, Tag, Gamepad2, UserCog, Palette, BarChart, GripVertical
+  Gift, Tag, Gamepad2, UserCog, Palette, BarChart, GripVertical
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -187,12 +187,6 @@ export default function Admin() {
               onClick={() => setActiveTab('dashboard')}
             />
             <NavItem
-              icon={<BarChart3 />}
-              label="Métricas"
-              active={activeTab === 'metrics'}
-              onClick={() => setActiveTab('metrics')}
-            />
-            <NavItem
               icon={<Settings />}
               label="Configuração"
               active={activeTab === 'settings'}
@@ -240,19 +234,6 @@ export default function Admin() {
                 label="Notificações"
                 active={activeTab === 'notifications'}
                 onClick={() => setActiveTab('notifications')}
-              />
-            </NavSection>
-            
-            <NavSection
-              title="Marketing"
-              expanded={expandedSections.marketing}
-              onToggle={() => setExpandedSections({...expandedSections, marketing: !expandedSections.marketing})}
-            >
-              <NavSubItem
-                icon={<ShoppingBag />}
-                label="Loja de Coins"
-                active={activeTab === 'coin-store'}
-                onClick={() => setActiveTab('coin-store')}
               />
             </NavSection>
             
@@ -336,6 +317,7 @@ export default function Admin() {
           {activeTab === 'ggr' && <GGRTab token={token || ''} />}
           {activeTab === 'bets' && <BetsTab token={token || ''} />}
           {activeTab === 'notifications' && <NotificationsTab token={token || ''} />}
+          {activeTab === 'coupons' && <CouponsTab token={token || ''} />}
         </main>
       </div>
     </div>
@@ -414,78 +396,37 @@ function DashboardTab({ stats, loading }: { stats: Stats | null; loading: boolea
           <RefreshCw size={18} /> Atualizar
         </button>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      {/* 5 indicadores principais: depósitos totais, saques, primeiros depósitos, usuários, GGR */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <StatCard 
-          title="USUARIOS NA CASA" 
-          value={stats.usuarios_na_casa ?? stats.total_users} 
-          subtitle={`${stats.usuarios_na_casa ?? stats.total_users} Usuarios Registrados`}
+          title="DEPÓSITOS TOTAIS" 
+          value={`R$ ${(stats.total_deposit_amount ?? 0).toFixed(2)}`} 
+          subtitle={`${stats.total_deposits ?? 0} transações`}
+          icon={<ArrowDownCircle />} 
+        />
+        <StatCard 
+          title="SAQUES TOTAIS" 
+          value={`R$ ${(stats.total_withdrawal_amount ?? 0).toFixed(2)}`} 
+          subtitle={`${stats.total_withdrawals ?? 0} transações`}
+          icon={<ArrowUpCircle />} 
+        />
+        <StatCard 
+          title="PRIMEIROS DEPÓSITOS" 
+          value={stats.total_ftds ?? 0} 
+          subtitle="Usuários com 1º depósito"
+          icon={<TrendingUp />} 
+        />
+        <StatCard 
+          title="USUÁRIOS" 
+          value={stats.total_users ?? 0} 
+          subtitle={`${stats.jogadores_com_saldo ?? 0} com saldo`}
           icon={<Users />} 
           accent 
         />
         <StatCard 
-          title="BALANÇO JOGADOR" 
-          value={`R$ ${(stats.balanco_jogador_total ?? 0).toFixed(2)}`} 
-          subtitle={`${stats.jogadores_com_saldo ?? 0} Jogadores com Saldo`}
-          icon={<DollarSign />} 
-        />
-        <StatCard 
           title="GGR GERADO" 
-          value={`R$ ${(stats.ggr_gerado ?? stats.net_revenue).toFixed(2)}`} 
-          subtitle={`Taxa (${stats.ggr_taxa ?? 17}%)`}
-          icon={<TrendingUp />} 
-        />
-        <StatCard 
-          title="TOTAL PAGO GGR" 
-          value={`R$ ${(stats.total_pago_ggr ?? stats.total_withdrawal_amount).toFixed(2)}`} 
-          subtitle={`${stats.pagamentos_feitos_total ?? stats.total_withdrawals} Pagamento Feitos`}
-          icon={<ArrowUpCircle />} 
-        />
-        <StatCard 
-          title="PIX RECEBIDO HOJE" 
-          value={`R$ ${(stats.pix_recebido_hoje ?? 0).toFixed(2)}`} 
-          subtitle={`${stats.pix_recebido_count_hoje ?? 0} Pagamentos recebidos`}
-          icon={<ArrowDownCircle />} 
-        />
-        <StatCard 
-          title="PIX FEITO HOJE" 
-          value={`R$ ${(stats.pix_feito_hoje ?? 0).toFixed(2)}`} 
-          subtitle={`${stats.pix_feito_count_hoje ?? 0} Pagamentos feitos`}
-          icon={<ArrowUpCircle />} 
-        />
-        <StatCard 
-          title="PIX GERADO HOJE" 
-          value={stats.pix_gerado_hoje ?? 0} 
-          subtitle={`${Math.round(stats.pix_percentual_pago ?? 0)}% Pago`}
-          icon={<Activity />} 
-        />
-        <StatCard 
-          title="USUÁRIO REGISTRADOS HOJE" 
-          value={stats.usuarios_registrados_hoje ?? 0} 
-          subtitle={`${stats.depositos_hoje ?? 0} Depósitos (${stats.depositos_hoje ? Math.round((stats.depositos_hoje / (stats.usuarios_registrados_hoje || 1)) * 100) : 0}%)`}
-          icon={<Users />} 
-        />
-        <StatCard 
-          title="PAGAMENTOS RECEBIDOS" 
-          value={`R$ ${(stats.valor_pagamentos_recebidos_hoje ?? 0).toFixed(2)}`} 
-          subtitle={`${stats.pagamentos_recebidos_hoje ?? 0} Depósitos Recebidos`}
-          icon={<ArrowDownCircle />} 
-        />
-        <StatCard 
-          title="PAGAMENTOS FEITOS" 
-          value={`R$ ${(stats.valor_pagamentos_feitos_hoje ?? 0).toFixed(2)}`} 
-          subtitle={`${stats.pagamentos_feitos_hoje ?? 0} Pagamentos enviados`}
-          icon={<ArrowUpCircle />} 
-        />
-        <StatCard 
-          title="FTD HOJE" 
-          value={stats.ftd_hoje ?? 0} 
-          subtitle={`${stats.total_ftds} Totais (geral)`}
-          icon={<TrendingUp />} 
-        />
-        <StatCard 
-          title="TOTAL LUCRO" 
-          value={`R$ ${(stats.total_lucro ?? stats.net_revenue).toFixed(2)}`} 
-          subtitle="Total de lucro geral"
+          value={`R$ ${(stats.ggr_gerado ?? stats.net_revenue ?? 0).toFixed(2)}`} 
+          subtitle="Depósitos − Saques"
           icon={<DollarSign />} 
         />
       </div>
@@ -1017,7 +958,7 @@ function IGameWinTab({ token }: { token: string }) {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ agent_code: '', agent_key: '', api_url: 'https://api.igamewin.com', credentials: '', is_active: true });
+  const [form, setForm] = useState({ agent_code: '', agent_key: '', api_url: 'https://api.igamewin.com', credentials: '', is_active: true, rtp: 96 });
   const [editingId, setEditingId] = useState<number | null>(null);
   const [games, setGames] = useState<any[]>([]);
   const [providers, setProviders] = useState<any[]>([]);
@@ -1142,7 +1083,7 @@ function IGameWinTab({ token }: { token: string }) {
       
       // Limpar formulário e recarregar dados
       setEditingId(null);
-      setForm({ agent_code: '', agent_key: '', api_url: 'https://api.igamewin.com', credentials: '', is_active: true });
+      setForm({ agent_code: '', agent_key: '', api_url: 'https://api.igamewin.com', credentials: '', is_active: true, rtp: 96 });
       await fetchData();
       
       // Aguardar um pouco para garantir que o banco foi atualizado
@@ -1166,7 +1107,8 @@ function IGameWinTab({ token }: { token: string }) {
       agent_key: agent.agent_key || '',
       api_url: agent.api_url || 'https://api.igamewin.com',
       credentials: agent.credentials || '',
-      is_active: agent.is_active !== undefined ? agent.is_active : true
+      is_active: agent.is_active !== undefined ? agent.is_active : true,
+      rtp: agent.rtp != null ? Number(agent.rtp) : 96
     });
     // Scroll para o formulário
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1174,7 +1116,7 @@ function IGameWinTab({ token }: { token: string }) {
 
   const resetForm = () => {
     setEditingId(null);
-    setForm({ agent_code: '', agent_key: '', api_url: 'https://api.igamewin.com', credentials: '', is_active: true });
+    setForm({ agent_code: '', agent_key: '', api_url: 'https://api.igamewin.com', credentials: '', is_active: true, rtp: 96 });
   };
 
   const deleteAgent = async (agentId: number) => {
@@ -1220,7 +1162,7 @@ function IGameWinTab({ token }: { token: string }) {
 
     if (items.length === 0) {
       // Se não há agentes, limpar formulário
-      setForm({ agent_code: '', agent_key: '', api_url: 'https://api.igamewin.com', credentials: '', is_active: true });
+      setForm({ agent_code: '', agent_key: '', api_url: 'https://api.igamewin.com', credentials: '', is_active: true, rtp: 96 });
       setGames([]);
       setProviders([]);
       setAgentBalance(null);
@@ -1254,7 +1196,8 @@ function IGameWinTab({ token }: { token: string }) {
         agent_key: agent.agent_key || '',
         api_url: agent.api_url || 'https://api.igamewin.com',
         credentials: agent.credentials || '',
-        is_active: agent.is_active !== undefined ? agent.is_active : true
+        is_active: agent.is_active !== undefined ? agent.is_active : true,
+        rtp: agent.rtp != null ? Number(agent.rtp) : 96
       };
       setForm(newForm);
     }
@@ -1386,6 +1329,19 @@ function IGameWinTab({ token }: { token: string }) {
         <input className="bg-gray-700 rounded px-3 py-2 text-sm" placeholder="Agent Code" value={form.agent_code} onChange={e=>setForm({...form, agent_code:e.target.value})}/>
         <input className="bg-gray-700 rounded px-3 py-2 text-sm" placeholder="Agent Key" value={form.agent_key} onChange={e=>setForm({...form, agent_key:e.target.value})}/>
         <input className="bg-gray-700 rounded px-3 py-2 text-sm md:col-span-2" placeholder="API URL" value={form.api_url} onChange={e=>setForm({...form, api_url:e.target.value})}/>
+        <div>
+          <label className="block text-sm text-gray-400 mb-1">RTP do agente (%)</label>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step={0.01}
+            className="w-full bg-gray-700 rounded px-3 py-2 text-sm"
+            value={form.rtp}
+            onChange={e=>setForm({...form, rtp: Number(e.target.value)})}
+          />
+          <p className="text-xs text-gray-500 mt-1">Return to Player. Valor entre 0 e 100 (ex: 96 = 96%). Enviado ao provedor no lançamento do jogo.</p>
+        </div>
         <textarea className="bg-gray-700 rounded px-3 py-2 text-sm md:col-span-2" placeholder="Credenciais extras (JSON)" value={form.credentials} onChange={e=>setForm({...form, credentials:e.target.value})}/>
         <div className="flex items-center gap-2">
           <input type="checkbox" checked={form.is_active} onChange={e=>setForm({...form, is_active:e.target.checked})}/>
@@ -1424,6 +1380,7 @@ function IGameWinTab({ token }: { token: string }) {
                       )}
                     </div>
                     <div className="text-sm text-gray-400">API: {agent.api_url}</div>
+                    <div className="text-sm text-gray-400">RTP: {agent.rtp != null ? `${Number(agent.rtp)}%` : '96%'}</div>
                     <div className="text-sm text-gray-400">Status: {agent.is_active ? 'Ativo' : 'Inativo'}</div>
                     {agent.agent_key && (
                       <div className="text-xs text-gray-500 mt-1">Agent Key: {agent.agent_key.substring(0, 10)}...</div>
@@ -1545,7 +1502,7 @@ function IGameWinTab({ token }: { token: string }) {
 }
 
 function SettingsTab({ token }: { token: string }) {
-  const [form, setForm] = useState({ pass_rate: 0, min_amount: 0, is_active: true });
+  const [form, setForm] = useState({ pass_rate: 0, min_amount: 2, min_withdrawal: 10, is_active: true });
   const [supportPhone, setSupportPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingSupport, setLoadingSupport] = useState(false);
@@ -1561,7 +1518,12 @@ function SettingsTab({ token }: { token: string }) {
       });
       if (!res.ok) throw new Error('Falha ao carregar configurações');
       const data = await res.json();
-      setForm({ pass_rate: data.pass_rate ?? 0, min_amount: data.min_amount ?? 0, is_active: data.is_active });
+      setForm({
+        pass_rate: data.pass_rate ?? 0,
+        min_amount: data.min_amount ?? 2,
+        min_withdrawal: data.min_withdrawal ?? 10,
+        is_active: data.is_active
+      });
     } catch (err:any) { setError(err.message); } finally { setLoading(false); }
   };
 
@@ -1645,19 +1607,20 @@ function SettingsTab({ token }: { token: string }) {
 
   return (
     <div className="space-y-6">
-      {/* Configurações FTD */}
+      {/* Depósito mínimo e Saque mínimo (usados na validação de depósitos e saques) */}
       <div className="space-y-4">
-        <h2 className="text-2xl font-bold">Configurações (FTD)</h2>
+        <h2 className="text-2xl font-bold">Configurações</h2>
+        <p className="text-sm text-gray-400">Valores usados na validação de depósitos e saques no site.</p>
         {error && <div className="text-red-400">{error}</div>}
         {loading && <div className="text-sm text-gray-400">Carregando...</div>}
         <div className="grid md:grid-cols-2 gap-3 bg-gray-800/60 p-4 rounded border border-gray-700">
           <div>
-            <label className="text-sm text-gray-300">Taxa de passagem (%)</label>
-            <input type="number" className="w-full bg-gray-700 rounded px-3 py-2" value={form.pass_rate} onChange={e=>setForm({...form, pass_rate:Number(e.target.value)})}/>
+            <label className="text-sm text-gray-300">Depósito mínimo (R$)</label>
+            <input type="number" step="0.01" min="0" className="w-full bg-gray-700 rounded px-3 py-2" value={form.min_amount} onChange={e=>setForm({...form, min_amount:Number(e.target.value)})}/>
           </div>
           <div>
-            <label className="text-sm text-gray-300">Depósito mínimo</label>
-            <input type="number" className="w-full bg-gray-700 rounded px-3 py-2" value={form.min_amount} onChange={e=>setForm({...form, min_amount:Number(e.target.value)})}/>
+            <label className="text-sm text-gray-300">Saque mínimo (R$)</label>
+            <input type="number" step="0.01" min="0" className="w-full bg-gray-700 rounded px-3 py-2" value={form.min_withdrawal} onChange={e=>setForm({...form, min_withdrawal:Number(e.target.value)})}/>
           </div>
           <div className="flex items-center gap-2">
             <input type="checkbox" checked={form.is_active} onChange={e=>setForm({...form, is_active:e.target.checked})}/>
@@ -3311,6 +3274,294 @@ function ProviderOrderSection({ token, providers, loadingGames }: { token: strin
               )}
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const emptyCouponForm = {
+  code: '',
+  discount_type: 'percent' as const,
+  discount_value: 0,
+  min_deposit: 0,
+  max_uses: 0,
+  valid_until: '',
+  is_active: true,
+};
+
+function CouponsTab({ token }: { token: string }) {
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState(emptyCouponForm);
+
+  const fetchCoupons = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_URL}/api/admin/coupons`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Falha ao carregar cupons');
+      const data = await res.json();
+      setItems(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openEdit = (c: any) => {
+    setEditingId(c.id);
+    setShowForm(true);
+    setForm({
+      code: c.code || '',
+      discount_type: c.discount_type === 'fixed' ? 'fixed' : 'percent',
+      discount_value: c.discount_value ?? 0,
+      min_deposit: c.min_deposit ?? 0,
+      max_uses: c.max_uses ?? 0,
+      valid_until: c.valid_until ? c.valid_until.slice(0, 10) : '',
+      is_active: c.is_active ?? true,
+    });
+  };
+
+  const cancelForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setForm(emptyCouponForm);
+    setError('');
+  };
+
+  const saveCoupon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.code.trim()) {
+      setError('Código é obrigatório');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const body: any = {
+        code: form.code.trim().toUpperCase(),
+        discount_type: form.discount_type,
+        discount_value: form.discount_value,
+        min_deposit: form.min_deposit,
+        max_uses: form.max_uses,
+        is_active: form.is_active,
+      };
+      if (form.valid_until) body.valid_until = form.valid_until + 'T23:59:59';
+      const url = editingId
+        ? `${API_URL}/api/admin/coupons/${editingId}`
+        : `${API_URL}/api/admin/coupons`;
+      const method = editingId ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || (editingId ? 'Falha ao atualizar cupom' : 'Falha ao criar cupom'));
+      }
+      await fetchCoupons();
+      cancelForm();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteCoupon = async (id: number) => {
+    if (!confirm('Excluir este cupom?')) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/coupons/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Falha ao excluir');
+      await fetchCoupons();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCoupons();
+  }, []);
+
+  const formatDate = (s: string) => {
+    if (!s) return '-';
+    try {
+      const d = new Date(s);
+      return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return s || '-';
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold">Cupons</h2>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => (showForm ? cancelForm() : setShowForm(true))}
+            className="px-3 py-2 bg-[#d4af37] hover:bg-[#c5a028] text-black rounded font-semibold"
+          >
+            {showForm ? 'Cancelar' : 'Novo Cupom'}
+          </button>
+          <button onClick={fetchCoupons} className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded">
+            <RefreshCw size={18} /> Atualizar
+          </button>
+        </div>
+      </div>
+      {error && <div className="text-red-400">{error}</div>}
+      {showForm && (
+        <form onSubmit={saveCoupon} className="bg-gray-800/60 p-4 rounded border border-gray-700 space-y-3">
+          <h3 className="font-semibold">{editingId ? 'Editar cupom' : 'Criar cupom'}</h3>
+          <div className="grid md:grid-cols-2 gap-3">
+            <div>
+              <label className="text-sm text-gray-400">Código *</label>
+              <input
+                className="w-full bg-gray-700 rounded px-3 py-2 text-sm"
+                value={form.code}
+                onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
+                placeholder="Ex: BEMVINDO10"
+              />
+            </div>
+            <div>
+              <label className="text-sm text-gray-400">Tipo</label>
+              <select
+                className="w-full bg-gray-700 rounded px-3 py-2 text-sm"
+                value={form.discount_type}
+                onChange={(e) => setForm({ ...form, discount_type: e.target.value })}
+              >
+                <option value="percent">Percentual (%)</option>
+                <option value="fixed">Valor fixo (R$)</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-sm text-gray-400">Valor do desconto {form.discount_type === 'percent' ? '(%)' : '(R$)'}</label>
+              <input
+                type="number"
+                step={form.discount_type === 'percent' ? 1 : 0.01}
+                min={0}
+                className="w-full bg-gray-700 rounded px-3 py-2 text-sm"
+                value={form.discount_value}
+                onChange={(e) => setForm({ ...form, discount_value: Number(e.target.value) })}
+              />
+            </div>
+            <div>
+              <label className="text-sm text-gray-400">Depósito mínimo (R$)</label>
+              <input
+                type="number"
+                step="0.01"
+                min={0}
+                className="w-full bg-gray-700 rounded px-3 py-2 text-sm"
+                value={form.min_deposit}
+                onChange={(e) => setForm({ ...form, min_deposit: Number(e.target.value) })}
+              />
+            </div>
+            <div>
+              <label className="text-sm text-gray-400">Máx. usos (0 = ilimitado)</label>
+              <input
+                type="number"
+                min={0}
+                className="w-full bg-gray-700 rounded px-3 py-2 text-sm"
+                value={form.max_uses}
+                onChange={(e) => setForm({ ...form, max_uses: Number(e.target.value) })}
+              />
+            </div>
+            <div>
+              <label className="text-sm text-gray-400">Válido até (data)</label>
+              <input
+                type="date"
+                className="w-full bg-gray-700 rounded px-3 py-2 text-sm"
+                value={form.valid_until}
+                onChange={(e) => setForm({ ...form, valid_until: e.target.value })}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={form.is_active}
+                onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
+              />
+              <span className="text-sm">Ativo</span>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button type="submit" className="px-4 py-2 bg-[#ff6b35] hover:bg-[#ff7b35] text-white rounded font-semibold">
+              {editingId ? 'Salvar' : 'Criar cupom'}
+            </button>
+            {editingId && (
+              <button type="button" onClick={cancelForm} className="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded font-semibold">
+                Cancelar
+              </button>
+            )}
+          </div>
+        </form>
+      )}
+      {loading && !items.length && <div className="text-gray-400">Carregando...</div>}
+      {!loading && items.length === 0 && !showForm && (
+        <div className="bg-gray-800/60 p-6 rounded border border-gray-700 text-center text-gray-400">
+          Nenhum cupom cadastrado. Clique em Novo Cupom para criar.
+        </div>
+      )}
+      {items.length > 0 && (
+        <div className="overflow-x-auto rounded border border-gray-700">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-800">
+              <tr>
+                <th className="text-left p-3">Código</th>
+                <th className="text-left p-3">Tipo</th>
+                <th className="text-left p-3">Valor</th>
+                <th className="text-left p-3">Dep. mín.</th>
+                <th className="text-left p-3">Usos</th>
+                <th className="text-left p-3">Válido até</th>
+                <th className="text-left p-3">Ativo</th>
+                <th className="text-left p-3">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((c) => (
+                <tr key={c.id} className="border-t border-gray-700 hover:bg-gray-800/50">
+                  <td className="p-3 font-mono">{c.code}</td>
+                  <td className="p-3">{c.discount_type === 'percent' ? '%' : 'R$'}</td>
+                  <td className="p-3">{c.discount_type === 'percent' ? `${c.discount_value}%` : `R$ ${c.discount_value?.toFixed(2)}`}</td>
+                  <td className="p-3">R$ {c.min_deposit?.toFixed(2)}</td>
+                  <td className="p-3">{c.max_uses === 0 ? '∞' : `${c.used_count ?? 0}/${c.max_uses}`}</td>
+                  <td className="p-3">{formatDate(c.valid_until)}</td>
+                  <td className="p-3">{c.is_active ? 'Sim' : 'Não'}</td>
+                  <td className="p-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openEdit(c)}
+                      className="text-[#d4af37] hover:text-[#c5a028] text-xs"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteCoupon(c.id)}
+                      className="text-red-400 hover:text-red-300 text-xs"
+                    >
+                      Excluir
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

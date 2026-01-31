@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from models import Base
 import os
@@ -21,6 +21,36 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def init_db():
     """Initialize database tables"""
     Base.metadata.create_all(bind=engine)
+    # Migração: adicionar coluna referred_by_affiliate_id em users (afiliado que indicou)
+    try:
+        with engine.connect() as conn:
+            if "sqlite" in DATABASE_URL:
+                conn.execute(text("ALTER TABLE users ADD COLUMN referred_by_affiliate_id INTEGER REFERENCES affiliates(id)"))
+            else:
+                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by_affiliate_id INTEGER REFERENCES affiliates(id)"))
+            conn.commit()
+    except Exception:
+        pass  # Coluna já existe ou tabela não existe
+    # Migração: adicionar coluna min_withdrawal em ftd_settings
+    try:
+        with engine.connect() as conn:
+            if "sqlite" in DATABASE_URL:
+                conn.execute(text("ALTER TABLE ftd_settings ADD COLUMN min_withdrawal REAL DEFAULT 10.0"))
+            else:
+                conn.execute(text("ALTER TABLE ftd_settings ADD COLUMN IF NOT EXISTS min_withdrawal DOUBLE PRECISION DEFAULT 10.0"))
+            conn.commit()
+    except Exception:
+        pass
+    # Migração: adicionar coluna rtp em igamewin_agents
+    try:
+        with engine.connect() as conn:
+            if "sqlite" in DATABASE_URL:
+                conn.execute(text("ALTER TABLE igamewin_agents ADD COLUMN rtp REAL DEFAULT 96.0"))
+            else:
+                conn.execute(text("ALTER TABLE igamewin_agents ADD COLUMN IF NOT EXISTS rtp DOUBLE PRECISION DEFAULT 96.0"))
+            conn.commit()
+    except Exception:
+        pass
 
 
 def get_db():

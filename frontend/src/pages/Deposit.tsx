@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, Copy, Check, Loader2, QrCode, AlertCircle } from 'lucide-react';
@@ -9,10 +9,50 @@ export default function Deposit() {
   const navigate = useNavigate();
   const { user, token } = useAuth();
   const [amount, setAmount] = useState('');
+  const [couponCode, setCouponCode] = useState('');
+  const [couponBonus, setCouponBonus] = useState<number | null>(null);
+  const [couponError, setCouponError] = useState('');
+  const [minDeposit, setMinDeposit] = useState(2);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [deposit, setDeposit] = useState<any>(null);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/public/minimums`)
+      .then((res) => res.ok ? res.json() : {})
+      .then((data) => {
+        if (typeof data.min_deposit === 'number' && data.min_deposit > 0) {
+          setMinDeposit(data.min_deposit);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const validateCoupon = () => {
+    const value = parseFloat(amount.replace(',', '.'));
+    if (!couponCode.trim() || isNaN(value) || value < minDeposit) {
+      setCouponBonus(null);
+      setCouponError('');
+      return;
+    }
+    setCouponError('');
+    fetch(`${API_URL}/api/public/payments/validate-coupon?code=${encodeURIComponent(couponCode.trim())}&amount=${value}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.valid && data.bonus_amount > 0) {
+          setCouponBonus(data.bonus_amount);
+          setCouponError('');
+        } else {
+          setCouponBonus(null);
+          setCouponError(data.message || 'Cupom inválido');
+        }
+      })
+      .catch(() => {
+        setCouponBonus(null);
+        setCouponError('Erro ao validar cupom');
+      });
+  };
 
   const handleDeposit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,8 +70,8 @@ export default function Deposit() {
       return;
     }
 
-    if (value < 2) {
-      setError('Valor mínimo de depósito é R$ 2,00');
+    if (value < minDeposit) {
+      setError(`Valor mínimo de depósito é R$ ${minDeposit.toFixed(2).replace('.', ',')}`);
       return;
     }
 
@@ -49,7 +89,8 @@ export default function Deposit() {
           payer_name: user.username || user.email,
           payer_tax_id: user.cpf || '',
           payer_email: user.email,
-          payer_phone: user.phone || undefined
+          payer_phone: user.phone || undefined,
+          coupon_code: couponCode.trim() || undefined
         })
       });
 
@@ -146,7 +187,7 @@ export default function Deposit() {
                 Digite o valor que deseja depositar. O código PIX será gerado automaticamente.
               </p>
               <p className="text-yellow-400 text-sm">
-                ⚠️ Valor mínimo: R$ 2,00
+                ⚠️ Valor mínimo: R$ {minDeposit.toFixed(2).replace('.', ',')}
               </p>
             </div>
 
@@ -170,6 +211,43 @@ export default function Deposit() {
                     required
                     disabled={loading}
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-400 mb-2">
+                    Cupom (opcional)
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={couponCode}
+                      onChange={(e) => {
+                        setCouponCode(e.target.value.toUpperCase());
+                        setCouponBonus(null);
+                        setCouponError('');
+                      }}
+                      onBlur={validateCoupon}
+                      placeholder="Ex: BEMVINDO10"
+                      className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 focus:border-[#d4af37] focus:outline-none"
+                      disabled={loading}
+                    />
+                    <button
+                      type="button"
+                      onClick={validateCoupon}
+                      disabled={loading || !amount || !couponCode.trim()}
+                      className="px-4 py-3 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded-lg font-medium"
+                    >
+                      Validar
+                    </button>
+                  </div>
+                  {couponBonus != null && couponBonus > 0 && (
+                    <p className="mt-2 text-sm text-green-400">
+                      Cupom válido! Bônus: R$ {couponBonus.toFixed(2).replace('.', ',')}
+                    </p>
+                  )}
+                  {couponError && (
+                    <p className="mt-2 text-sm text-red-400">{couponError}</p>
+                  )}
                 </div>
 
                 {error && (
@@ -209,11 +287,25 @@ export default function Deposit() {
                   <p className="text-gray-300 text-sm">Escaneie o QR Code ou copie o código PIX</p>
                 </div>
               </div>
-              <div className="bg-gray-900 rounded-lg p-4">
+              <div className="bg-gray-900 rounded-lg p-4 space-y-2">
                 <p className="text-sm text-gray-400 mb-1">Valor a pagar:</p>
                 <p className="text-2xl font-bold text-[#d4af37]">
                   R$ {deposit.amount.toFixed(2).replace('.', ',')}
                 </p>
+                {(() => {
+                  try {
+                    const meta = deposit.metadata_json ? JSON.parse(deposit.metadata_json) : {};
+                    const bonus = meta.bonus_amount;
+                    if (bonus && bonus > 0) {
+                      return (
+                        <p className="text-sm text-green-400">
+                          + Bônus do cupom: R$ {Number(bonus).toFixed(2).replace('.', ',')} (creditado após confirmação do pagamento)
+                        </p>
+                      );
+                    }
+                  } catch (_) {}
+                  return null;
+                })()}
               </div>
             </div>
 

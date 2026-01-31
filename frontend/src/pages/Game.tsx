@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, memo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
 
 // Backend FastAPI - usa variável de ambiente ou fallback para localhost
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+// Intervalo de atualização de saldo na página do jogo (evita re-renders que podem afetar a sessão)
+const BALANCE_POLL_INTERVAL_MS = 30000; // 30 segundos
 
 export default function Game() {
   const { gameCode } = useParams<{ gameCode: string }>();
@@ -13,54 +16,48 @@ export default function Game() {
   const [gameUrl, setGameUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const launchCalledRef = useRef(false);
+  const refreshUserRef = useRef(refreshUser);
+  refreshUserRef.current = refreshUser;
 
   useEffect(() => {
-    // Aguardar o AuthContext terminar de carregar
-    if (authLoading) {
-      return;
-    }
-
+    if (authLoading) return;
     if (!token || !user) {
       setError('Você precisa estar logado para jogar');
       setLoading(false);
       return;
     }
-
-    // Verificar se o usuário tem saldo
     if (!user.balance || user.balance <= 0) {
       setError('Você precisa ter saldo para jogar. Faça um depósito primeiro.');
       setLoading(false);
       return;
     }
-
     if (!gameCode) {
       setError('Código do jogo não encontrado');
       setLoading(false);
       return;
     }
+    if (launchCalledRef.current) return;
+    launchCalledRef.current = true;
 
     const launchGame = async () => {
       try {
         const res = await fetch(`${API_URL}/api/public/games/${gameCode}/launch?lang=pt`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
+          headers: { 'Authorization': `Bearer ${token}` },
         });
-
         if (!res.ok) {
           const data = await res.json().catch(() => ({ detail: 'Erro ao iniciar jogo' }));
           throw new Error(data.detail || 'Erro ao iniciar jogo');
         }
-
         const data = await res.json();
         setGameUrl(data.game_url || data.launch_url);
       } catch (err: any) {
         setError(err.message || 'Erro ao carregar jogo');
+        launchCalledRef.current = false;
       } finally {
         setLoading(false);
       }
     };
-
     launchGame();
   }, [gameCode, token, user, authLoading]);
 
@@ -106,78 +103,74 @@ export default function Game() {
 
   return (
     <div className="min-h-screen bg-[#0a0e0f] text-white">
-      {/* Header com botão voltar */}
+      {/* Header com botão voltar e aviso de sessão */}
       <div className="bg-[#0a4d3e] border-b border-[#0d5d4b] sticky top-0 z-40">
         <div className="container mx-auto px-4 py-3">
-          <button
-            onClick={() => navigate('/')}
-            className="flex items-center gap-2 text-white hover:text-[#d4af37] transition-colors"
-          >
-            <ArrowLeft size={20} />
-            <span className="font-medium">Voltar</span>
-          </button>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <button
+              onClick={() => navigate('/')}
+              className="flex items-center gap-2 text-white hover:text-[#d4af37] transition-colors"
+            >
+              <ArrowLeft size={20} />
+              <span className="font-medium">Voltar</span>
+            </button>
+            <p className="text-xs text-[#d4af37]/90 max-w-md">
+              Evite atualizar a página ou abrir o jogo em outra aba durante a partida; isso pode encerrar sua sessão.
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Iframe do jogo */}
+      {/* Iframe do jogo - estável: não re-renderiza para não afetar a sessão */}
       {gameUrl && (
-        <GameIframeWrapper 
-          gameUrl={gameUrl} 
+        <GameIframeWrapper
+          gameUrl={gameUrl}
           token={token}
-          onBalanceUpdate={refreshUser}
+          onBalanceUpdateRef={refreshUserRef}
         />
       )}
     </div>
   );
 }
 
-// Componente wrapper para o iframe que atualiza saldo automaticamente
-function GameIframeWrapper({ 
+// Wrapper memoizado: evita re-renders que possam afetar a sessão do jogo
+const GameIframeWrapper = memo(function GameIframeWrapper({ 
   gameUrl, 
   token, 
-  onBalanceUpdate 
-}: { 
-  gameUrl: string; 
+  onBalanceUpdateRef,
+}: {
+  gameUrl: string;
   token: string | null;
-  onBalanceUpdate: () => void;
+  onBalanceUpdateRef: React.MutableRefObject<() => void | Promise<void>>;
 }) {
   useEffect(() => {
     if (!token) return;
 
     // Atualizar saldo quando a página recebe foco (usuário volta da aba do jogo)
     const handleFocus = () => {
-      onBalanceUpdate();
+      onBalanceUpdateRef.current?.();
     };
     window.addEventListener('focus', handleFocus);
 
     // Atualizar saldo quando a página fica visível novamente
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        onBalanceUpdate();
+        onBalanceUpdateRef.current?.();
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // Atualizar saldo periodicamente enquanto joga (a cada 5 segundos)
+    // Atualizar saldo a cada 30s (intervalo maior para não afetar a sessão do jogo)
     const balanceInterval = setInterval(() => {
-      onBalanceUpdate();
-    }, 5000);
-
-    // Atualizar saldo quando sai da página (antes de desmontar)
-    const handleBeforeUnload = () => {
-      onBalanceUpdate();
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
+      onBalanceUpdateRef.current?.();
+    }, BALANCE_POLL_INTERVAL_MS);
 
     return () => {
       clearInterval(balanceInterval);
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      // Atualizar saldo uma última vez ao sair
-      onBalanceUpdate();
     };
-  }, [token, onBalanceUpdate]);
+  }, [token, onBalanceUpdateRef]);
 
   return (
     <div className="w-full h-[calc(100vh-60px)]">
@@ -190,4 +183,4 @@ function GameIframeWrapper({
       />
     </div>
   );
-}
+});

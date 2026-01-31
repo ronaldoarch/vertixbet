@@ -227,12 +227,15 @@ export default function RegisterModal({ isOpen, onClose, onSwitchToLogin }: Regi
               setError('');
               setLoading(true);
               try {
+                const params = new URLSearchParams(window.location.search);
+                const ref = params.get('ref') || undefined;
                 await register({
                   username: formData.nome.toLowerCase().replace(/\s+/g, '_'),
                   email: formData.email,
                   password: formData.senha,
                   cpf: formData.cpf || undefined,
                   phone: formData.telefone || undefined,
+                  affiliate_code: ref,
                 });
                 onClose();
               } catch (err: any) {

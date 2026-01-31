@@ -34,6 +34,7 @@ interface RegisterData {
   password: string;
   cpf?: string;
   phone?: string;
+  affiliate_code?: string; // ref do link de afiliado (?ref=CODIGO)
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);

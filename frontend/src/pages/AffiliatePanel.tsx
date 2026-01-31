@@ -5,6 +5,13 @@ import { ArrowLeft, DollarSign, Users, TrendingUp, Copy, Check, Loader2 } from '
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+const PERIODS = [
+  { key: 'this_week', label: 'Esta semana' },
+  { key: 'last_week', label: 'Última semana' },
+  { key: 'this_month', label: 'Este mês' },
+  { key: 'last_month', label: 'Mês passado' },
+] as const;
+
 export default function AffiliatePanel() {
   const navigate = useNavigate();
   const { token } = useAuth();
@@ -12,6 +19,9 @@ export default function AffiliatePanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [period, setPeriod] = useState<typeof PERIODS[number]['key']>('this_week');
+  const [meusDados, setMeusDados] = useState<any>(null);
+  const [loadingDados, setLoadingDados] = useState(false);
 
   useEffect(() => {
     if (!token) {
@@ -20,6 +30,20 @@ export default function AffiliatePanel() {
     }
     fetchAffiliateData();
   }, [token, navigate]);
+
+  useEffect(() => {
+    if (!token || !affiliate) return;
+    setLoadingDados(true);
+    fetch(`${API_URL}/api/public/affiliate/meus-dados?period=${period}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        setMeusDados(data);
+      })
+      .catch(() => setMeusDados(null))
+      .finally(() => setLoadingDados(false));
+  }, [token, affiliate, period]);
 
   const fetchAffiliateData = async () => {
     try {
@@ -189,13 +213,60 @@ export default function AffiliatePanel() {
           </div>
         </div>
 
+        {/* Meus Dados (por período) */}
+        <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800 mt-6">
+          <h2 className="text-xl font-bold mb-4">Meus Dados</h2>
+          <div className="flex flex-wrap gap-2 mb-4">
+            {PERIODS.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                onClick={() => setPeriod(p.key)}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  period === p.key
+                    ? 'bg-[#d4af37] text-black'
+                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          {loadingDados && (
+            <p className="text-gray-400 text-sm">Carregando...</p>
+          )}
+          {!loadingDados && meusDados && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div className="bg-gray-800/60 rounded-lg p-4">
+                <p className="text-gray-400 mb-1">Novos subordinados</p>
+                <p className="text-xl font-bold text-white">{meusDados.new_referrals ?? 0}</p>
+              </div>
+              <div className="bg-gray-800/60 rounded-lg p-4">
+                <p className="text-gray-400 mb-1">Depósitos (valor)</p>
+                <p className="text-xl font-bold text-green-400">R$ {(meusDados.deposits_total ?? 0).toFixed(2).replace('.', ',')}</p>
+                <p className="text-xs text-gray-500">{meusDados.deposits_count ?? 0} transações</p>
+              </div>
+              <div className="bg-gray-800/60 rounded-lg p-4">
+                <p className="text-gray-400 mb-1">Primeiros depósitos (FTD)</p>
+                <p className="text-xl font-bold text-[#d4af37]">{meusDados.ftds_count ?? 0}</p>
+                <p className="text-xs text-gray-500">R$ {(meusDados.ftds_amount ?? 0).toFixed(2).replace('.', ',')}</p>
+              </div>
+              <div className="bg-gray-800/60 rounded-lg p-4">
+                <p className="text-gray-400 mb-1">Saques (valor)</p>
+                <p className="text-xl font-bold text-white">R$ {(meusDados.withdrawals_total ?? 0).toFixed(2).replace('.', ',')}</p>
+                <p className="text-xs text-gray-500">{meusDados.withdrawals_count ?? 0} transações</p>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Informações Adicionais */}
         <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800 mt-6">
           <h2 className="text-xl font-bold mb-4">Informações</h2>
           <div className="space-y-3 text-sm">
             <div className="flex justify-between">
               <span className="text-gray-400">Total Depositado pelos Indicados:</span>
-              <span className="font-semibold">R$ {affiliate?.total_deposits.toFixed(2).replace('.', ',') || '0,00'}</span>
+              <span className="font-semibold">R$ {affiliate?.total_deposits?.toFixed(2).replace('.', ',') || '0,00'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-400">Status:</span>
