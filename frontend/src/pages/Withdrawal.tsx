@@ -20,8 +20,8 @@ export default function Withdrawal() {
 
   useEffect(() => {
     fetch(`${API_URL}/api/public/minimums`)
-      .then((res) => res.ok ? res.json() : {})
-      .then((data) => {
+      .then((res) => res.ok ? res.json() : ({} as Record<string, unknown>))
+      .then((data: { min_withdrawal?: number }) => {
         if (typeof data.min_withdrawal === 'number' && data.min_withdrawal > 0) {
           setMinWithdrawal(data.min_withdrawal);
         }

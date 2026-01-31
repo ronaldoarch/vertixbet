@@ -20,8 +20,8 @@ export default function Deposit() {
 
   useEffect(() => {
     fetch(`${API_URL}/api/public/minimums`)
-      .then((res) => res.ok ? res.json() : {})
-      .then((data) => {
+      .then((res) => res.ok ? res.json() : ({} as Record<string, unknown>))
+      .then((data: { min_deposit?: number }) => {
         if (typeof data.min_deposit === 'number' && data.min_deposit > 0) {
           setMinDeposit(data.min_deposit);
         }

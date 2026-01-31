@@ -3280,9 +3280,19 @@ function ProviderOrderSection({ token, providers, loadingGames }: { token: strin
   );
 }
 
-const emptyCouponForm = {
+type CouponFormState = {
+  code: string;
+  discount_type: 'percent' | 'fixed';
+  discount_value: number;
+  min_deposit: number;
+  max_uses: number;
+  valid_until: string;
+  is_active: boolean;
+};
+
+const emptyCouponForm: CouponFormState = {
   code: '',
-  discount_type: 'percent' as const,
+  discount_type: 'percent',
   discount_value: 0,
   min_deposit: 0,
   max_uses: 0,
@@ -3296,7 +3306,7 @@ function CouponsTab({ token }: { token: string }) {
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState(emptyCouponForm);
+  const [form, setForm] = useState<CouponFormState>(emptyCouponForm);
 
   const fetchCoupons = async () => {
     setLoading(true);
@@ -3443,7 +3453,7 @@ function CouponsTab({ token }: { token: string }) {
               <select
                 className="w-full bg-gray-700 rounded px-3 py-2 text-sm"
                 value={form.discount_type}
-                onChange={(e) => setForm({ ...form, discount_type: e.target.value })}
+                onChange={(e) => setForm({ ...form, discount_type: e.target.value as 'percent' | 'fixed' })}
               >
                 <option value="percent">Percentual (%)</option>
                 <option value="fixed">Valor fixo (R$)</option>
