@@ -4,6 +4,8 @@ from sqlalchemy import func
 from sqlalchemy import desc
 from typing import List, Optional
 from datetime import datetime
+import asyncio
+import time
 import uuid
 import json
 
@@ -727,6 +729,12 @@ async def list_igamewin_games(
     }
 
 
+# Cache para jogos da home (3 provedores, 15 jogos cada) - TTL 5 min
+_home_games_cache: Optional[dict] = None
+_home_games_cache_ts: float = 0
+_HOME_GAMES_CACHE_TTL_SEC = 300  # 5 minutos
+
+
 @public_router.get("/games")
 async def public_games(
     provider_code: Optional[str] = Query(None),
@@ -738,6 +746,12 @@ async def public_games(
             status_code=400, 
             detail="Nenhum agente IGameWin ativo configurado ou credenciais incompletas (agent_code/agent_key vazios)"
         )
+
+    # Usar cache para home (sem provider_code) - evita chamadas repetidas à IGameWin
+    global _home_games_cache, _home_games_cache_ts
+    if not provider_code and _home_games_cache is not None:
+        if (time.time() - _home_games_cache_ts) < _HOME_GAMES_CACHE_TTL_SEC:
+            return _home_games_cache
 
     providers = await api.get_providers()
     if providers is None:
@@ -803,64 +817,71 @@ async def public_games(
         }
     
     # Se não há provider_code, busca jogos APENAS dos 3 provedores prioritários (para home)
-    # Limite: 15 jogos por provedor
+    # Limite: 3 provedores, 15 jogos por provedor - chamadas em PARALELO para reduzir tempo
     GAMES_PER_PROVIDER = 15
+    MAX_PROVIDERS = 3
     all_games = []
     
     # Filtrar apenas os 3 provedores prioritários
     if priority_provider_list:
-        # Criar um mapa de códigos para facilitar busca
         provider_code_map = {p.get("code") or p.get("provider_code"): p for p in providers}
-        
-        # Obter apenas os 3 provedores prioritários na ordem correta
         active_providers = []
-        for prov_code in priority_provider_list[:3]:  # Garantir máximo de 3
+        for prov_code in priority_provider_list[:MAX_PROVIDERS]:
             if prov_code in provider_code_map:
                 provider = provider_code_map[prov_code]
                 if str(provider.get("status", 1)) in ["1", "true", "True"]:
                     active_providers.append(provider)
     else:
-        # Fallback: se não há provedores prioritários configurados, não retornar jogos
-        # O admin deve configurar os provedores prioritários primeiro
-        active_providers = []
+        # Fallback: usar os 3 primeiros provedores ativos da API se não houver ProviderOrder
+        active_providers = [
+            p for p in providers
+            if str(p.get("status", 1)) in ["1", "true", "True"]
+        ][:MAX_PROVIDERS]
     
-    # Buscar jogos apenas dos provedores prioritários (máximo 3)
-    for provider in active_providers:
+    async def fetch_games_for_provider(provider: dict) -> list:
         prov_code = provider.get("code") or provider.get("provider_code")
         if not prov_code:
-            continue
-        
+            return []
         games = await api.get_games(provider_code=prov_code)
         if games is None:
-            continue
-        
+            return []
         games = _normalize_games(games, prov_code)
-        
-        # Limitar a 15 jogos por provedor
-        games_count = 0
+        result = []
         for g in games:
-            if games_count >= GAMES_PER_PROVIDER:
+            if len(result) >= GAMES_PER_PROVIDER:
                 break
-                
             status_val = g.get("status")
             is_active = (status_val == 1) or (status_val is True) or (str(status_val).lower() == "active")
             if not is_active:
                 continue
-                
-            all_games.append({
+            result.append({
                 "name": g.get("game_name") or g.get("name") or g.get("title") or g.get("gameTitle"),
                 "code": g.get("game_code") or g.get("code") or g.get("game_id") or g.get("id") or g.get("slug"),
                 "provider": g.get("provider_code") or g.get("provider") or g.get("provider_name") or g.get("vendor") or g.get("vendor_name") or prov_code,
                 "banner": g.get("banner") or g.get("image") or g.get("icon"),
                 "status": "active"
             })
-            games_count += 1
+        return result
+    
+    # Buscar jogos dos 3 provedores EM PARALELO (reduz tempo de ~2min para ~30-40s)
+    if active_providers:
+        tasks = [fetch_games_for_provider(p) for p in active_providers]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for games_list in results:
+            if isinstance(games_list, Exception):
+                continue
+            all_games.extend(games_list)
 
-    return {
+    response = {
         "providers": providers,
         "provider_code": None,
         "games": all_games
     }
+    # Salvar no cache para home (sem provider_code)
+    if not provider_code:
+        _home_games_cache = response
+        _home_games_cache_ts = time.time()
+    return response
 
 
 @public_router.get("/games/{game_code}/launch")

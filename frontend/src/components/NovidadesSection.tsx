@@ -258,8 +258,8 @@ export default function NovidadesSection({ filters, onProvidersLoaded }: Novidad
 
             <div className="space-y-6">
               {providerEntries.map(([providerName, providerGames]) => {
-                // Limitar a 20 jogos por provedor na home
-                const limitedGames = providerGames.slice(0, 20);
+                // Limitar a 15 jogos por provedor na home (alinhado ao backend)
+                const limitedGames = providerGames.slice(0, 15);
                 return (
                   <div key={providerName} className="space-y-3">
                     <div className="flex items-center justify-between">
@@ -267,7 +267,7 @@ export default function NovidadesSection({ filters, onProvidersLoaded }: Novidad
                         <div className="w-1.5 h-8 rounded-full bg-[#d4af37]" />
                         <h4 className="text-lg md:text-xl font-extrabold uppercase tracking-wide">{providerName}</h4>
                         <span className="text-xs text-gray-400">
-                          ({limitedGames.length}{providerGames.length > 20 ? ` de ${providerGames.length}` : ''})
+                          ({limitedGames.length}{providerGames.length > 15 ? ` de ${providerGames.length}` : ''})
                         </span>
                       </div>
                     </div>
