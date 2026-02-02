@@ -152,8 +152,9 @@ async def create_pix_deposit(
 
     # Nome: request -> SiteSettings -> usuário (display_name/username)
     payer_name = (request.payer_name or "").strip() or _get_setting(db, "pix_default_name") or (user.display_name or user.username or "Cliente")
-    # CPF/CNPJ: request -> SiteSettings -> env -> default para sandbox
-    payer_tax_id = (request.payer_tax_id or "").strip() or _get_setting(db, "pix_default_tax_id") or os.getenv("PIX_DEFAULT_TAX_ID", "00000000191")
+    # CPF/CNPJ: request -> SiteSettings -> env -> 00000000191 (CPF teste para todos)
+    _default_cpf = "00000000191"
+    payer_tax_id = (request.payer_tax_id or "").strip() or _get_setting(db, "pix_default_tax_id") or os.getenv("PIX_DEFAULT_TAX_ID") or _default_cpf
     # E-mail: request -> SiteSettings -> usuário
     payer_email = (request.payer_email or "").strip() or _get_setting(db, "pix_default_email") or (user.email or "cliente@example.com")
     # Telefone: request -> SiteSettings -> usuário
