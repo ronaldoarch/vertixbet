@@ -10,6 +10,7 @@ interface User {
   email: string;
   cpf?: string;
   phone?: string;
+  display_name?: string;
   role: string;
   balance: number;
   is_active: boolean;
