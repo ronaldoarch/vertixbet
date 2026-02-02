@@ -61,6 +61,38 @@ def init_db():
             conn.commit()
     except Exception:
         pass
+    # Migração: ftd_bonus_percentage em ftd_settings
+    try:
+        with engine.connect() as conn:
+            if "sqlite" in DATABASE_URL:
+                conn.execute(text("ALTER TABLE ftd_settings ADD COLUMN ftd_bonus_percentage REAL DEFAULT 0.0"))
+            else:
+                conn.execute(text("ALTER TABLE ftd_settings ADD COLUMN IF NOT EXISTS ftd_bonus_percentage DOUBLE PRECISION DEFAULT 0.0"))
+            conn.commit()
+    except Exception:
+        pass
+    # Migração: bonus_balance em users (bônus não sacável)
+    try:
+        with engine.connect() as conn:
+            if "sqlite" in DATABASE_URL:
+                conn.execute(text("ALTER TABLE users ADD COLUMN bonus_balance REAL DEFAULT 0.0"))
+            else:
+                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS bonus_balance DOUBLE PRECISION DEFAULT 0.0"))
+            conn.commit()
+    except Exception:
+        pass
+    # Migração: reload_bonus em ftd_settings
+    try:
+        with engine.connect() as conn:
+            if "sqlite" in DATABASE_URL:
+                conn.execute(text("ALTER TABLE ftd_settings ADD COLUMN reload_bonus_percentage REAL DEFAULT 0.0"))
+                conn.execute(text("ALTER TABLE ftd_settings ADD COLUMN reload_bonus_min_deposit REAL DEFAULT 0.0"))
+            else:
+                conn.execute(text("ALTER TABLE ftd_settings ADD COLUMN IF NOT EXISTS reload_bonus_percentage DOUBLE PRECISION DEFAULT 0.0"))
+                conn.execute(text("ALTER TABLE ftd_settings ADD COLUMN IF NOT EXISTS reload_bonus_min_deposit DOUBLE PRECISION DEFAULT 0.0"))
+            conn.commit()
+    except Exception:
+        pass
 
 
 def get_db():

@@ -1509,7 +1509,7 @@ function IGameWinTab({ token }: { token: string }) {
 const PIX_KEYS = ['pix_default_name', 'pix_default_tax_id', 'pix_default_email', 'pix_default_phone'] as const;
 
 function SettingsTab({ token }: { token: string }) {
-  const [form, setForm] = useState({ pass_rate: 0, min_amount: 2, min_withdrawal: 10, is_active: true });
+  const [form, setForm] = useState({ pass_rate: 0, ftd_bonus_percentage: 0, reload_bonus_percentage: 0, reload_bonus_min_deposit: 0, min_amount: 2, min_withdrawal: 10, is_active: true });
   const [supportPhone, setSupportPhone] = useState('');
   const [pixDefaults, setPixDefaults] = useState({ pix_default_name: '', pix_default_tax_id: '', pix_default_email: '', pix_default_phone: '' });
   const [loading, setLoading] = useState(false);
@@ -1530,6 +1530,9 @@ function SettingsTab({ token }: { token: string }) {
       const data = await res.json();
       setForm({
         pass_rate: data.pass_rate ?? 0,
+        ftd_bonus_percentage: data.ftd_bonus_percentage ?? 0,
+        reload_bonus_percentage: data.reload_bonus_percentage ?? 0,
+        reload_bonus_min_deposit: data.reload_bonus_min_deposit ?? 0,
         min_amount: data.min_amount ?? 2,
         min_withdrawal: data.min_withdrawal ?? 10,
         is_active: data.is_active
@@ -1673,6 +1676,20 @@ function SettingsTab({ token }: { token: string }) {
         {error && <div className="text-red-400">{error}</div>}
         {loading && <div className="text-sm text-gray-400">Carregando...</div>}
         <div className="grid md:grid-cols-2 gap-3 bg-gray-800/60 p-4 rounded border border-gray-700">
+          <div>
+            <label className="text-sm text-gray-300">Bônus 1º depósito (%)</label>
+            <input type="number" step="0.1" min="0" max="1000" className="w-full bg-gray-700 rounded px-3 py-2" placeholder="Ex: 100 = dobra o valor" value={form.ftd_bonus_percentage} onChange={e=>setForm({...form, ftd_bonus_percentage:Number(e.target.value)})}/>
+            <p className="text-xs text-gray-500 mt-1">Ex: 100 = 100% de bônus (dobra). 0 = sem bônus automático. Bônus não é sacável.</p>
+          </div>
+          <div>
+            <label className="text-sm text-gray-300">Bônus Reload (%)</label>
+            <input type="number" step="0.1" min="0" max="1000" className="w-full bg-gray-700 rounded px-3 py-2" placeholder="Ex: 50 = 50% em depósitos após o 1º" value={form.reload_bonus_percentage} onChange={e=>setForm({...form, reload_bonus_percentage:Number(e.target.value)})}/>
+            <p className="text-xs text-gray-500 mt-1">Bônus em depósitos após o 1º. 0 = desativado.</p>
+          </div>
+          <div>
+            <label className="text-sm text-gray-300">Depósito mínimo para Reload (R$)</label>
+            <input type="number" step="0.01" min="0" className="w-full bg-gray-700 rounded px-3 py-2" placeholder="0 = qualquer valor" value={form.reload_bonus_min_deposit} onChange={e=>setForm({...form, reload_bonus_min_deposit:Number(e.target.value)})}/>
+          </div>
           <div>
             <label className="text-sm text-gray-300">Depósito mínimo (R$)</label>
             <input type="number" step="0.01" min="0" className="w-full bg-gray-700 rounded px-3 py-2" value={form.min_amount} onChange={e=>setForm({...form, min_amount:Number(e.target.value)})}/>

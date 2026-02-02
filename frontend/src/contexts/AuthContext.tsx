@@ -11,6 +11,7 @@ interface User {
   display_name?: string;
   role: string;
   balance: number;
+  bonus_balance?: number;  // Bônus (usável em jogos, não sacável)
   is_active: boolean;
   is_verified: boolean;
   created_at: string;

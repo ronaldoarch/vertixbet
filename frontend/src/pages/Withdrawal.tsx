@@ -49,8 +49,8 @@ export default function Withdrawal() {
       return;
     }
 
-    if (user.balance < value) {
-      setError('Saldo insuficiente para realizar o saque.');
+    if ((user.balance ?? 0) < value) {
+      setError('Saldo sacável insuficiente. Bônus não pode ser sacado.');
       return;
     }
 
@@ -121,7 +121,10 @@ export default function Withdrawal() {
               </p>
               <div className="space-y-2 text-sm">
                 <p className="text-yellow-400">⚠️ Valor mínimo: R$ {minWithdrawal.toFixed(2).replace('.', ',')}</p>
-                <p className="text-white">💰 Saldo disponível: R$ {user?.balance.toFixed(2).replace('.', ',') || '0,00'}</p>
+                <p className="text-white">💰 Saldo sacável: R$ {(user?.balance ?? 0).toFixed(2).replace('.', ',')}</p>
+                {(user?.bonus_balance ?? 0) > 0 && (
+                  <p className="text-gray-400 text-xs">Bônus (R$ {(user?.bonus_balance ?? 0).toFixed(2).replace('.', ',')}) só pode ser usado nos jogos.</p>
+                )}
               </div>
             </div>
 

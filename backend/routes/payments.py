@@ -512,13 +512,69 @@ async def webhook_pix_cashin(request: Request, db: Session = Depends(get_db)):
                     coupon = db.query(Coupon).filter(Coupon.id == dep_meta["coupon_id"]).first()
                     if coupon:
                         coupon.used_count = (coupon.used_count or 0) + 1
+                # Bônus FTD (1º depósito) e Reload (depósitos após o 1º)
+                is_first_deposit = db.query(FTD).filter(FTD.user_id == deposit.user_id).first() is None
+                ftd_bonus = 0.0
+                reload_bonus = 0.0
+                ftd_settings = db.query(FTDSettings).filter(FTDSettings.is_active == True).first()
+                if user and is_first_deposit:
+                    ftd_pct = getattr(ftd_settings, "ftd_bonus_percentage", 0.0) or 0.0
+                    if ftd_pct > 0:
+                        ftd_bonus = round(deposit.amount * (ftd_pct / 100.0), 2)
+                        bonus_to_credit += ftd_bonus
+                        print(f"[FTD] Bônus {ftd_pct}% no 1º depósito: R$ {ftd_bonus}")
+                    # Criar registro FTD
+                    pass_rate = getattr(ftd_settings, "pass_rate", 0.0) if ftd_settings else 0.0
+                    ftd = FTD(
+                        user_id=deposit.user_id,
+                        deposit_id=deposit.id,
+                        amount=deposit.amount,
+                        is_first_deposit=True,
+                        pass_rate=pass_rate,
+                        status=TransactionStatus.APPROVED
+                    )
+                    db.add(ftd)
+                elif user and ftd_settings:
+                    # Reload: bônus em depósitos após o 1º
+                    reload_pct = getattr(ftd_settings, "reload_bonus_percentage", 0.0) or 0.0
+                    reload_min = getattr(ftd_settings, "reload_bonus_min_deposit", 0.0) or 0.0
+                    if reload_pct > 0 and deposit.amount >= reload_min:
+                        reload_bonus = round(deposit.amount * (reload_pct / 100.0), 2)
+                        bonus_to_credit += reload_bonus
+                        print(f"[RELOAD] Bônus {reload_pct}% no depósito: R$ {reload_bonus}")
                 if user:
                     saldo_anterior = user.balance
-                    user.balance += deposit.amount + bonus_to_credit
-                    print(f"Saldo anterior: {saldo_anterior}, Valor creditado: {deposit.amount} + bônus: {bonus_to_credit}, Novo saldo: {user.balance}")
+                    bonus_bal = getattr(user, "bonus_balance", 0.0) or 0.0
+                    user.balance += deposit.amount  # Apenas valor real (sacável)
+                    user.bonus_balance = bonus_bal + bonus_to_credit  # Bônus: FTD/cupom/reload (não sacável)
+                    print(f"Saldo: {saldo_anterior} + {deposit.amount} = {user.balance} | Bônus: {bonus_bal} + {bonus_to_credit} = {user.bonus_balance}")
                 else:
                     print(f"ERRO: Usuário {deposit.user_id} não encontrado!")
-                
+                # Guardar total de bônus creditado (cupom + FTD) para possível chargeback
+                dep_meta["total_bonus_credited"] = bonus_to_credit
+                deposit.metadata_json = json.dumps(dep_meta)
+                # Afiliado: CPA no FTD + revshare em todo depósito
+                if user and user.referred_by_affiliate_id:
+                    aff = db.query(Affiliate).filter(Affiliate.id == user.referred_by_affiliate_id).first()
+                    if aff and aff.is_active:
+                        aff_user = db.query(User).filter(User.id == aff.user_id).first()
+                        if aff_user:
+                            cpa_to_credit = 0.0
+                            revshare_to_credit = 0.0
+                            if is_first_deposit and (aff.cpa_amount or 0) > 0:
+                                cpa_to_credit = float(aff.cpa_amount)
+                                aff.total_cpa_earned = (aff.total_cpa_earned or 0) + cpa_to_credit
+                                print(f"[AFFILIATE] CPA R$ {cpa_to_credit} para afiliado {aff.affiliate_code}")
+                            if (aff.revshare_percentage or 0) > 0:
+                                revshare_to_credit = round(deposit.amount * (aff.revshare_percentage / 100.0), 2)
+                                aff.total_revshare_earned = (aff.total_revshare_earned or 0) + revshare_to_credit
+                                print(f"[AFFILIATE] Revshare {aff.revshare_percentage}% = R$ {revshare_to_credit} para afiliado {aff.affiliate_code}")
+                            total_aff = cpa_to_credit + revshare_to_credit
+                            if total_aff > 0:
+                                aff.total_earnings = (aff.total_earnings or 0) + total_aff
+                                aff.total_deposits = (aff.total_deposits or 0) + deposit.amount
+                                aff_user.balance = (aff_user.balance or 0) + total_aff
+                                print(f"[AFFILIATE] Total creditado: R$ {total_aff} (saldo afiliado: {aff_user.balance})")
                 deposit.status = TransactionStatus.APPROVED
                 print(f"Depósito {deposit.id} aprovado com sucesso")
             else:
@@ -527,16 +583,37 @@ async def webhook_pix_cashin(request: Request, db: Session = Depends(get_db)):
             print(f"CHARGEBACK detectado para depósito {deposit.id}")
             if deposit.status == TransactionStatus.APPROVED:
                 dep_meta = json.loads(deposit.metadata_json) if deposit.metadata_json else {}
-                bonus_to_revert = float(dep_meta.get("bonus_amount") or 0)
-                total_to_revert = deposit.amount + bonus_to_revert
+                bonus_to_revert = float(dep_meta.get("total_bonus_credited") or dep_meta.get("bonus_amount") or 0)
                 user = db.query(User).filter(User.id == deposit.user_id).first()
-                if user and user.balance >= total_to_revert:
-                    user.balance -= total_to_revert
-                    print(f"Saldo revertido: {user.balance}")
+                if user:
+                    if user.balance >= deposit.amount:
+                        user.balance -= deposit.amount
+                    if (getattr(user, "bonus_balance", 0) or 0) >= bonus_to_revert:
+                        user.bonus_balance = max(0, (getattr(user, "bonus_balance", 0) or 0) - bonus_to_revert)
+                    print(f"Chargeback: saldo={user.balance}, bonus={getattr(user, 'bonus_balance', 0)}")
                 if dep_meta.get("coupon_id"):
                     coupon = db.query(Coupon).filter(Coupon.id == dep_meta["coupon_id"]).first()
                     if coupon and (coupon.used_count or 0) > 0:
                         coupon.used_count -= 1
+                # Reverter créditos de afiliado (CPA e revshare) se houver
+                if user and user.referred_by_affiliate_id:
+                    aff = db.query(Affiliate).filter(Affiliate.id == user.referred_by_affiliate_id).first()
+                    if aff:
+                        aff_user = db.query(User).filter(User.id == aff.user_id).first()
+                        if aff_user:
+                            ftd = db.query(FTD).filter(FTD.deposit_id == deposit.id).first()
+                            revshare = round(deposit.amount * (aff.revshare_percentage / 100.0), 2) if (aff.revshare_percentage or 0) > 0 else 0.0
+                            cpa = float(aff.cpa_amount) if ftd and (aff.cpa_amount or 0) > 0 else 0.0
+                            to_revert_aff = cpa + revshare
+                            if to_revert_aff > 0 and (aff_user.balance or 0) >= to_revert_aff:
+                                aff_user.balance -= to_revert_aff
+                                aff.total_earnings = max(0, (aff.total_earnings or 0) - to_revert_aff)
+                                if cpa > 0:
+                                    aff.total_cpa_earned = max(0, (aff.total_cpa_earned or 0) - cpa)
+                                if revshare > 0:
+                                    aff.total_revshare_earned = max(0, (aff.total_revshare_earned or 0) - revshare)
+                                aff.total_deposits = max(0, (aff.total_deposits or 0) - deposit.amount)
+                                print(f"[AFFILIATE] Revertido R$ {to_revert_aff} do afiliado (chargeback)")
             deposit.status = TransactionStatus.CANCELLED
         else:
             print(f"Status desconhecido ou não processado: {status_transaction}")
@@ -690,23 +767,29 @@ async def webhook_igamewin_bet(request: Request, db: Session = Depends(get_db)):
         
         db.add(bet)
         
-        # Atualizar saldo do jogador
-        # Debitar valor da aposta
-        user.balance -= bet_amount
-        
-        # Se ganhou, creditar valor ganho
+        # Atualizar saldo: debitar da aposta (bonus_balance primeiro, depois balance)
+        bonus_bal = getattr(user, "bonus_balance", 0) or 0
+        to_deduct = bet_amount
+        if bonus_bal >= to_deduct:
+            user.bonus_balance = bonus_bal - to_deduct
+        elif bonus_bal > 0:
+            user.bonus_balance = 0
+            user.balance = (user.balance or 0) - (to_deduct - bonus_bal)
+        else:
+            user.balance = (user.balance or 0) - to_deduct
+        # Ganhos vão para balance (sacável)
         if win_amount > 0:
-            user.balance += win_amount
+            user.balance = (user.balance or 0) + win_amount
         
-        # Sincronizar saldo com IGameWin
+        # Sincronizar com IGameWin se houver divergência (fonte de verdade)
         api = get_igamewin_api(db)
         if api:
-            # Obter saldo atual do IGameWin
             igamewin_balance = await api.get_user_balance(user_code)
             if igamewin_balance is not None:
-                # Sincronizar: se o saldo do IGameWin for diferente, ajustar
-                if abs(igamewin_balance - user.balance) > 0.01:  # Tolerância de 1 centavo
+                total_local = (user.balance or 0) + (getattr(user, "bonus_balance", 0) or 0)
+                if abs(igamewin_balance - total_local) > 0.01:
                     user.balance = igamewin_balance
+                    user.bonus_balance = 0  # Reset split em caso de sync
         
         db.commit()
         db.refresh(bet)

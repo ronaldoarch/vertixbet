@@ -188,8 +188,8 @@ export default function Header({ onMenuClick, onLoginClick, onRegisterClick }: H
                   className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-[#0d5d4b] hover:bg-[#0f6d5b] rounded-md transition-colors"
                 >
                   <Wallet size={18} className="text-[#d4af37]" />
-                  <span className="text-sm font-semibold">
-                    R$ {user.balance.toFixed(2).replace('.', ',')}
+                  <span className="text-sm font-semibold" title={`Sacável: R$ ${(user.balance || 0).toFixed(2).replace('.', ',')}${(user.bonus_balance || 0) > 0 ? ` | Bônus: R$ ${(user.bonus_balance || 0).toFixed(2).replace('.', ',')}` : ''}`}>
+                    R$ {((user.balance || 0) + (user.bonus_balance || 0)).toFixed(2).replace('.', ',')}
                   </span>
                 </button>
                 {/* Perfil */}

@@ -31,7 +31,8 @@ class User(Base):
     phone = Column(String(20))
     password_hash = Column(String(255), nullable=False)
     role = Column(Enum(UserRole), default=UserRole.USER, nullable=False)
-    balance = Column(Float, default=0.0, nullable=False)
+    balance = Column(Float, default=0.0, nullable=False)  # Saldo real (sacável)
+    bonus_balance = Column(Float, default=0.0, nullable=False)  # Bônus FTD/cupom/reload (usável em jogos, não sacável)
     is_active = Column(Boolean, default=True, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
     referred_by_affiliate_id = Column(Integer, ForeignKey("affiliates.id"), nullable=True, index=True)  # Afiliado que indicou
@@ -133,6 +134,9 @@ class FTDSettings(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     pass_rate = Column(Float, default=0.0, nullable=False)  # Taxa de passagem (interno)
+    ftd_bonus_percentage = Column(Float, default=0.0, nullable=False)  # Bônus % no 1º depósito (ex: 100 = dobra)
+    reload_bonus_percentage = Column(Float, default=0.0, nullable=False)  # Bônus % em depósitos após o 1º (reload)
+    reload_bonus_min_deposit = Column(Float, default=0.0, nullable=False)  # Depósito mínimo para reload (R$)
     min_amount = Column(Float, default=2.0, nullable=False)  # Depósito mínimo (R$)
     min_withdrawal = Column(Float, default=10.0, nullable=False)  # Saque mínimo (R$)
     is_active = Column(Boolean, default=True, nullable=False)

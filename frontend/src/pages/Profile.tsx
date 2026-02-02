@@ -79,10 +79,15 @@ export default function Profile() {
                 <Wallet className="text-[#d4af37]" size={24} />
               </div>
               <div>
-                <p className="text-gray-300 text-sm">Saldo Disponível</p>
+                <p className="text-gray-300 text-sm">Saldo para jogar</p>
                 <p className="text-3xl font-bold text-white">
-                  R$ {user.balance.toFixed(2).replace('.', ',')}
+                  R$ {((user.balance || 0) + (user.bonus_balance || 0)).toFixed(2).replace('.', ',')}
                 </p>
+                {(user.bonus_balance || 0) > 0 && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Sacável: R$ {(user.balance || 0).toFixed(2).replace('.', ',')} · Bônus: R$ {(user.bonus_balance || 0).toFixed(2).replace('.', ',')} (jogos)
+                  </p>
+                )}
               </div>
             </div>
           </div>

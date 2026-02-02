@@ -27,7 +27,8 @@ export default function Game() {
       setLoading(false);
       return;
     }
-    if (!user.balance || user.balance <= 0) {
+    const totalBalance = (user.balance ?? 0) + (user.bonus_balance ?? 0);
+    if (totalBalance <= 0) {
       setError('Você precisa ter saldo para jogar. Faça um depósito primeiro.');
       setLoading(false);
       return;

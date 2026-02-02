@@ -38,6 +38,7 @@ class UserResponse(UserBase):
     id: int
     role: UserRole
     balance: float
+    bonus_balance: float = 0.0  # Bônus (usável em jogos, não sacável)
     is_active: bool
     is_verified: bool
     display_name: Optional[str] = None
@@ -230,6 +231,9 @@ class FTDResponse(FTDBase):
 # FTD Settings Schemas
 class FTDSettingsBase(BaseModel):
     pass_rate: float = 0.0
+    ftd_bonus_percentage: float = 0.0  # Bônus % no 1º depósito (ex: 100 = dobra o valor)
+    reload_bonus_percentage: float = 0.0  # Bônus % em depósitos após o 1º (reload)
+    reload_bonus_min_deposit: float = 0.0  # Depósito mínimo para reload (R$)
     min_amount: float = 2.0  # Depósito mínimo (R$)
     min_withdrawal: float = 10.0  # Saque mínimo (R$)
     is_active: bool = True

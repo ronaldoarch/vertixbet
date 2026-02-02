@@ -373,7 +373,7 @@ async def get_ftd_settings(
     settings = db.query(FTDSettings).filter(FTDSettings.is_active == True).first()
     if not settings:
         # Create default settings
-        settings = FTDSettings(pass_rate=0.0, min_amount=2.0, min_withdrawal=10.0, is_active=True)
+        settings = FTDSettings(pass_rate=0.0, ftd_bonus_percentage=0.0, reload_bonus_percentage=0.0, reload_bonus_min_deposit=0.0, min_amount=2.0, min_withdrawal=10.0, is_active=True)
         db.add(settings)
         db.commit()
         db.refresh(settings)
@@ -1021,32 +1021,34 @@ async def launch_game(
                 status_code=502,
                 detail=f"Erro ao criar usuário no IGameWin. {api.last_error or 'Erro desconhecido'}"
             )
-        # Transferir todo o saldo do jogador para o IGameWin
-        if current_user.balance > 0:
-            transfer_result = await api.transfer_in(current_user.username, current_user.balance)
+        # Transferir saldo total (balance + bonus_balance) para o IGameWin - usuário joga com ambos
+        total_playable = current_user.balance + (getattr(current_user, "bonus_balance", 0) or 0)
+        if total_playable > 0:
+            transfer_result = await api.transfer_in(current_user.username, total_playable)
             if not transfer_result:
                 raise HTTPException(
                     status_code=502,
                     detail=f"Erro ao transferir saldo para IGameWin. {api.last_error or 'Erro desconhecido'}"
                 )
-    elif igamewin_balance != current_user.balance:
-        # Saldos diferentes, sincronizar
-        balance_diff = current_user.balance - igamewin_balance
-        if balance_diff > 0:
-            # Saldo local maior, transferir diferença para IGameWin
-            transfer_result = await api.transfer_in(current_user.username, balance_diff)
-            if not transfer_result:
-                raise HTTPException(
-                    status_code=502,
-                    detail=f"Erro ao transferir saldo para IGameWin. {api.last_error or 'Erro desconhecido'}"
-                )
-        elif balance_diff < 0:
-            # Saldo IGameWin maior (usuário ganhou), apenas atualizar saldo local
-            # NÃO fazer transfer_out aqui - isso retiraria o dinheiro que o usuário ganhou!
-            # O saldo será sincronizado pelo webhook quando houver apostas
-            current_user.balance = igamewin_balance
-            db.commit()
-            print(f"[GAME LAUNCH] Saldo sincronizado: usuário {current_user.username} ganhou R$ {abs(balance_diff):.2f}")
+    else:
+        total_local = current_user.balance + (getattr(current_user, "bonus_balance", 0) or 0)
+        if igamewin_balance != total_local:
+            # Saldos diferentes, sincronizar (balance + bonus_balance = total jogável)
+            balance_diff = total_local - igamewin_balance
+            if balance_diff > 0:
+                # Saldo local maior, transferir diferença para IGameWin
+                transfer_result = await api.transfer_in(current_user.username, balance_diff)
+                if not transfer_result:
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"Erro ao transferir saldo para IGameWin. {api.last_error or 'Erro desconhecido'}"
+                    )
+            elif balance_diff < 0:
+                # Usuário ganhou no jogo: diferença vai para balance (sacável)
+                won_amount = abs(balance_diff)
+                current_user.balance = (current_user.balance or 0) + won_amount
+                db.commit()
+                print(f"[GAME LAUNCH] Saldo sincronizado: usuário {current_user.username} ganhou R$ {won_amount:.2f}")
     
     # Gerar URL de lançamento do jogo usando user_code (username)
     launch_url = await api.launch_game(
