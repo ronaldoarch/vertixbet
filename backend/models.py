@@ -318,6 +318,10 @@ class Promotion(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     valid_from = Column(DateTime, nullable=True)
     valid_until = Column(DateTime, nullable=True)
+    # Promoções funcionais
+    promotion_type = Column(String(50), default="display", nullable=False)  # display, cashback, ftd, reload
+    bonus_value = Column(Float, default=0.0, nullable=False)  # Ex: 25 = 25% (cashback)
+    min_deposit = Column(Float, default=0.0, nullable=False)  # Depósito mínimo (cashback)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

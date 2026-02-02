@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from database import get_db
 from sqlalchemy import func
-from models import User, Deposit, Withdrawal, Gateway, TransactionStatus, Bet, BetStatus, Affiliate, FTDSettings, FTD, Coupon, CouponType, SiteSettings
+from models import User, Deposit, Withdrawal, Gateway, TransactionStatus, Bet, BetStatus, Affiliate, FTDSettings, FTD, Coupon, CouponType, SiteSettings, Promotion
 from suitpay_api import SuitPayAPI
 from schemas import DepositResponse, WithdrawalResponse, DepositPixRequest, WithdrawalPixRequest, AffiliateResponse
 from dependencies import get_current_user
@@ -780,6 +780,31 @@ async def webhook_igamewin_bet(request: Request, db: Session = Depends(get_db)):
         # Ganhos vão para balance (sacável)
         if win_amount > 0:
             user.balance = (user.balance or 0) + win_amount
+        else:
+            # Cashback: se perdeu, verificar promoção ativa de cashback
+            from datetime import datetime as dt
+            now = dt.utcnow()
+            cashback_promo = db.query(Promotion).filter(
+                Promotion.promotion_type == "cashback",
+                Promotion.is_active == True,
+                (Promotion.valid_from == None) | (Promotion.valid_from <= now),
+                (Promotion.valid_until == None) | (Promotion.valid_until >= now),
+                Promotion.bonus_value > 0
+            ).order_by(Promotion.display_order.desc()).first()
+            if cashback_promo:
+                min_dep = getattr(cashback_promo, "min_deposit", 0) or 0
+                if min_dep > 0:
+                    total_deposited = db.query(func.sum(Deposit.amount)).filter(
+                        Deposit.user_id == user.id,
+                        Deposit.status == TransactionStatus.APPROVED
+                    ).scalar() or 0
+                    if total_deposited < min_dep:
+                        cashback_promo = None  # Não aplica: depósito mínimo não atingido
+                if cashback_promo:
+                    cashback_amount = round(bet_amount * (cashback_promo.bonus_value / 100.0), 2)
+                    if cashback_amount > 0:
+                        user.bonus_balance = (getattr(user, "bonus_balance", 0) or 0) + cashback_amount
+                        print(f"[CASHBACK] {cashback_promo.bonus_value}% = R$ {cashback_amount} para {user_code}")
         
         # Sincronizar com IGameWin se houver divergência (fonte de verdade)
         api = get_igamewin_api(db)

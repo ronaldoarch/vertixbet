@@ -303,6 +303,9 @@ class PromotionBase(BaseModel):
     is_active: bool = True
     valid_from: Optional[datetime] = None
     valid_until: Optional[datetime] = None
+    promotion_type: str = "display"  # display, cashback, ftd, reload
+    bonus_value: float = 0.0  # Ex: 25 = 25% (cashback)
+    min_deposit: float = 0.0  # Depósito mínimo (cashback)
 
 
 class PromotionCreate(PromotionBase):
@@ -318,6 +321,9 @@ class PromotionUpdate(BaseModel):
     is_active: Optional[bool] = None
     valid_from: Optional[datetime] = None
     valid_until: Optional[datetime] = None
+    promotion_type: Optional[str] = None
+    bonus_value: Optional[float] = None
+    min_deposit: Optional[float] = None
 
 
 class PromotionResponse(PromotionBase):

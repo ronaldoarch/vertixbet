@@ -93,6 +93,20 @@ def init_db():
             conn.commit()
     except Exception:
         pass
+    # Migração: promotion_type, bonus_value, min_deposit em promotions
+    try:
+        with engine.connect() as conn:
+            if "sqlite" in DATABASE_URL:
+                conn.execute(text("ALTER TABLE promotions ADD COLUMN promotion_type VARCHAR(50) DEFAULT 'display'"))
+                conn.execute(text("ALTER TABLE promotions ADD COLUMN bonus_value REAL DEFAULT 0.0"))
+                conn.execute(text("ALTER TABLE promotions ADD COLUMN min_deposit REAL DEFAULT 0.0"))
+            else:
+                conn.execute(text("ALTER TABLE promotions ADD COLUMN IF NOT EXISTS promotion_type VARCHAR(50) DEFAULT 'display'"))
+                conn.execute(text("ALTER TABLE promotions ADD COLUMN IF NOT EXISTS bonus_value DOUBLE PRECISION DEFAULT 0.0"))
+                conn.execute(text("ALTER TABLE promotions ADD COLUMN IF NOT EXISTS min_deposit DOUBLE PRECISION DEFAULT 0.0"))
+            conn.commit()
+    except Exception:
+        pass
 
 
 def get_db():

@@ -6,7 +6,7 @@ import {
   ArrowDownCircle, Activity, RefreshCw,
   Image as ImageIcon, Home,
   ChevronUp, ChevronDown, Percent, FileText, 
-  Gift, Tag, Gamepad2, UserCog, Palette, BarChart, GripVertical
+  Gift, Tag, Gamepad2, UserCog, Palette, BarChart, GripVertical, FileDown
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { API_URL } from '../utils/api';
@@ -483,15 +483,48 @@ function UsersTab({ token }: { token: string }) {
     }
   };
 
+  const exportPdf = async () => {
+    try {
+      const { jsPDF } = await import('jspdf');
+      const { autoTable } = await import('jspdf-autotable');
+      const doc = new jsPDF();
+      doc.setFontSize(16);
+      doc.text('Lista de Usuários', 14, 20);
+      doc.setFontSize(10);
+      doc.text(`Exportado em ${new Date().toLocaleString('pt-BR')}`, 14, 28);
+      autoTable(doc, {
+        startY: 35,
+        head: [['ID', 'Usuário', 'Email', 'Saldo', 'Status']],
+        body: users.map(u => [
+          String(u.id),
+          u.username || '',
+          u.email || '',
+          `R$ ${(u.balance ?? 0).toFixed(2).replace('.', ',')}`,
+          u.is_active ? 'Ativo' : 'Inativo'
+        ]),
+        styles: { fontSize: 8 }
+      });
+      doc.save(`usuarios_${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch (err: any) {
+      console.error(err);
+      alert('Erro ao exportar PDF. Execute: npm install jspdf jspdf-autotable');
+    }
+  };
+
   useEffect(() => { fetchUsers(); }, []);
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold">Usuários</h2>
-        <button onClick={fetchUsers} className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded">
-          <RefreshCw size={18} /> Atualizar
-        </button>
+        <div className="flex gap-2">
+          <button onClick={exportPdf} className="flex items-center gap-2 px-3 py-2 bg-[#d4af37] hover:bg-[#c5a028] text-black rounded font-semibold">
+            <FileDown size={18} /> Exportar PDF
+          </button>
+          <button onClick={fetchUsers} className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded">
+            <RefreshCw size={18} /> Atualizar
+          </button>
+        </div>
       </div>
       {error && <div className="text-red-400 mb-3">{error}</div>}
       {loading ? <div>Carregando...</div> : (
@@ -1509,7 +1542,7 @@ function IGameWinTab({ token }: { token: string }) {
 const PIX_KEYS = ['pix_default_name', 'pix_default_tax_id', 'pix_default_email', 'pix_default_phone'] as const;
 
 function SettingsTab({ token }: { token: string }) {
-  const [form, setForm] = useState({ pass_rate: 0, ftd_bonus_percentage: 0, reload_bonus_percentage: 0, reload_bonus_min_deposit: 0, min_amount: 2, min_withdrawal: 10, is_active: true });
+  const [form, setForm] = useState({ min_amount: 2, min_withdrawal: 10, is_active: true });
   const [supportPhone, setSupportPhone] = useState('');
   const [pixDefaults, setPixDefaults] = useState({ pix_default_name: '', pix_default_tax_id: '', pix_default_email: '', pix_default_phone: '' });
   const [loading, setLoading] = useState(false);
@@ -1529,10 +1562,6 @@ function SettingsTab({ token }: { token: string }) {
       if (!res.ok) throw new Error('Falha ao carregar configurações');
       const data = await res.json();
       setForm({
-        pass_rate: data.pass_rate ?? 0,
-        ftd_bonus_percentage: data.ftd_bonus_percentage ?? 0,
-        reload_bonus_percentage: data.reload_bonus_percentage ?? 0,
-        reload_bonus_min_deposit: data.reload_bonus_min_deposit ?? 0,
         min_amount: data.min_amount ?? 2,
         min_withdrawal: data.min_withdrawal ?? 10,
         is_active: data.is_active
@@ -1568,7 +1597,7 @@ function SettingsTab({ token }: { token: string }) {
       const res = await fetch(`${API_URL}/api/admin/ftd-settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(form)
+        body: JSON.stringify({ min_amount: form.min_amount, min_withdrawal: form.min_withdrawal, is_active: form.is_active })
       });
       if (!res.ok) throw new Error('Falha ao salvar configurações');
       await load();
@@ -1669,27 +1698,13 @@ function SettingsTab({ token }: { token: string }) {
 
   return (
     <div className="space-y-6">
-      {/* Depósito mínimo e Saque mínimo (usados na validação de depósitos e saques) */}
+      {/* Depósito mínimo e Saque mínimo (validação) */}
       <div className="space-y-4">
         <h2 className="text-2xl font-bold">Configurações</h2>
-        <p className="text-sm text-gray-400">Valores usados na validação de depósitos e saques no site.</p>
+        <p className="text-sm text-gray-400">Valores mínimos para depósitos e saques. FTD e Reload estão em Promoções.</p>
         {error && <div className="text-red-400">{error}</div>}
         {loading && <div className="text-sm text-gray-400">Carregando...</div>}
         <div className="grid md:grid-cols-2 gap-3 bg-gray-800/60 p-4 rounded border border-gray-700">
-          <div>
-            <label className="text-sm text-gray-300">Bônus 1º depósito (%)</label>
-            <input type="number" step="0.1" min="0" max="1000" className="w-full bg-gray-700 rounded px-3 py-2" placeholder="Ex: 100 = dobra o valor" value={form.ftd_bonus_percentage} onChange={e=>setForm({...form, ftd_bonus_percentage:Number(e.target.value)})}/>
-            <p className="text-xs text-gray-500 mt-1">Ex: 100 = 100% de bônus (dobra). 0 = sem bônus automático. Bônus não é sacável.</p>
-          </div>
-          <div>
-            <label className="text-sm text-gray-300">Bônus Reload (%)</label>
-            <input type="number" step="0.1" min="0" max="1000" className="w-full bg-gray-700 rounded px-3 py-2" placeholder="Ex: 50 = 50% em depósitos após o 1º" value={form.reload_bonus_percentage} onChange={e=>setForm({...form, reload_bonus_percentage:Number(e.target.value)})}/>
-            <p className="text-xs text-gray-500 mt-1">Bônus em depósitos após o 1º. 0 = desativado.</p>
-          </div>
-          <div>
-            <label className="text-sm text-gray-300">Depósito mínimo para Reload (R$)</label>
-            <input type="number" step="0.01" min="0" className="w-full bg-gray-700 rounded px-3 py-2" placeholder="0 = qualquer valor" value={form.reload_bonus_min_deposit} onChange={e=>setForm({...form, reload_bonus_min_deposit:Number(e.target.value)})}/>
-          </div>
           <div>
             <label className="text-sm text-gray-300">Depósito mínimo (R$)</label>
             <input type="number" step="0.01" min="0" className="w-full bg-gray-700 rounded px-3 py-2" value={form.min_amount} onChange={e=>setForm({...form, min_amount:Number(e.target.value)})}/>
@@ -3392,6 +3407,8 @@ function PromotionsTab({ token }: { token: string }) {
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [ftdForm, setFtdForm] = useState({ ftd_bonus_percentage: 0, reload_bonus_percentage: 0, reload_bonus_min_deposit: 0 });
+  const [ftdLoading, setFtdLoading] = useState(false);
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -3401,6 +3418,9 @@ function PromotionsTab({ token }: { token: string }) {
     is_active: true,
     valid_from: '',
     valid_until: '',
+    promotion_type: 'display',
+    bonus_value: 0,
+    min_deposit: 0,
   });
 
   const fetchPromotions = async () => {
@@ -3419,6 +3439,39 @@ function PromotionsTab({ token }: { token: string }) {
     }
   };
 
+  const fetchFtdSettings = async () => {
+    setFtdLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/ftd-settings`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const d = await res.json();
+        setFtdForm({
+          ftd_bonus_percentage: d.ftd_bonus_percentage ?? 0,
+          reload_bonus_percentage: d.reload_bonus_percentage ?? 0,
+          reload_bonus_min_deposit: d.reload_bonus_min_deposit ?? 0,
+        });
+      }
+    } catch (_) {}
+    finally { setFtdLoading(false); }
+  };
+
+  const saveFtdSettings = async () => {
+    setFtdLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/ftd-settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(ftdForm),
+      });
+      if (!res.ok) throw new Error('Falha ao salvar');
+      await fetchFtdSettings();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setFtdLoading(false);
+    }
+  };
+
   const openEdit = (p: any) => {
     setEditingId(p.id);
     setShowForm(true);
@@ -3431,13 +3484,16 @@ function PromotionsTab({ token }: { token: string }) {
       is_active: p.is_active ?? true,
       valid_from: p.valid_from ? p.valid_from.slice(0, 16) : '',
       valid_until: p.valid_until ? p.valid_until.slice(0, 16) : '',
+      promotion_type: p.promotion_type || 'display',
+      bonus_value: p.bonus_value ?? 0,
+      min_deposit: p.min_deposit ?? 0,
     });
   };
 
   const cancelForm = () => {
     setShowForm(false);
     setEditingId(null);
-    setForm({ title: '', description: '', image_url: '', link_url: '', display_order: 0, is_active: true, valid_from: '', valid_until: '' });
+    setForm({ title: '', description: '', image_url: '', link_url: '', display_order: 0, is_active: true, valid_from: '', valid_until: '', promotion_type: 'display', bonus_value: 0, min_deposit: 0 });
     setError('');
   };
 
@@ -3457,6 +3513,9 @@ function PromotionsTab({ token }: { token: string }) {
         link_url: form.link_url.trim() || null,
         display_order: form.display_order,
         is_active: form.is_active,
+        promotion_type: form.promotion_type,
+        bonus_value: form.bonus_value,
+        min_deposit: form.min_deposit,
       };
       if (form.valid_from) body.valid_from = form.valid_from + ':00';
       if (form.valid_until) body.valid_until = form.valid_until + ':00';
@@ -3515,6 +3574,7 @@ function PromotionsTab({ token }: { token: string }) {
 
   useEffect(() => {
     fetchPromotions();
+    fetchFtdSettings();
   }, []);
 
   const formatDate = (s: string) => {
@@ -3545,10 +3605,41 @@ function PromotionsTab({ token }: { token: string }) {
         </div>
       </div>
       {error && <div className="text-red-400">{error}</div>}
+
+      {/* FTD e Reload - configurações de bônus de depósito */}
+      <div className="bg-gray-800/60 p-4 rounded border border-gray-700">
+        <h3 className="font-semibold mb-3">Bônus de Depósito (FTD e Reload)</h3>
+        <div className="grid md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-sm text-gray-400">Bônus 1º depósito (%)</label>
+            <input type="number" step="0.1" min="0" max="1000" className="w-full bg-gray-700 rounded px-3 py-2" value={ftdForm.ftd_bonus_percentage} onChange={e=>setFtdForm({...ftdForm, ftd_bonus_percentage:Number(e.target.value)})}/>
+            <p className="text-xs text-gray-500">Ex: 100 = dobra. Bônus não sacável.</p>
+          </div>
+          <div>
+            <label className="text-sm text-gray-400">Bônus Reload (%)</label>
+            <input type="number" step="0.1" min="0" max="1000" className="w-full bg-gray-700 rounded px-3 py-2" value={ftdForm.reload_bonus_percentage} onChange={e=>setFtdForm({...ftdForm, reload_bonus_percentage:Number(e.target.value)})}/>
+            <p className="text-xs text-gray-500">Depósitos após o 1º.</p>
+          </div>
+          <div>
+            <label className="text-sm text-gray-400">Dep. mínimo Reload (R$)</label>
+            <input type="number" step="0.01" min="0" className="w-full bg-gray-700 rounded px-3 py-2" value={ftdForm.reload_bonus_min_deposit} onChange={e=>setFtdForm({...ftdForm, reload_bonus_min_deposit:Number(e.target.value)})}/>
+          </div>
+        </div>
+        <button onClick={saveFtdSettings} disabled={ftdLoading} className="mt-3 px-4 py-2 bg-[#ff6b35] hover:bg-[#ff7b35] disabled:opacity-50 text-white rounded font-semibold">Salvar FTD/Reload</button>
+      </div>
+
       {showForm && (
         <form onSubmit={savePromotion} className="bg-gray-800/60 p-4 rounded border border-gray-700 space-y-3">
           <h3 className="font-semibold">{editingId ? 'Editar promoção' : 'Criar promoção'}</h3>
           <div className="grid md:grid-cols-2 gap-3">
+            <div className="md:col-span-2">
+              <label className="text-sm text-gray-400">Tipo *</label>
+              <select className="w-full bg-gray-700 rounded px-3 py-2 text-sm" value={form.promotion_type} onChange={e=>setForm({...form, promotion_type:e.target.value})}>
+                <option value="display">Apenas exibição (banner)</option>
+                <option value="cashback">Cashback (% de perdas devolvido)</option>
+              </select>
+              <p className="text-xs text-gray-500">Cashback: ao perder, usuário recebe % do valor apostado como bônus.</p>
+            </div>
             <div className="md:col-span-2">
               <label className="text-sm text-gray-400">Título *</label>
               <input
@@ -3558,6 +3649,19 @@ function PromotionsTab({ token }: { token: string }) {
                 placeholder="Ex: Cashback 25%"
               />
             </div>
+            {form.promotion_type === 'cashback' && (
+              <>
+                <div>
+                  <label className="text-sm text-gray-400">Bônus (%) *</label>
+                  <input type="number" step="0.1" min="0" max="100" className="w-full bg-gray-700 rounded px-3 py-2 text-sm" value={form.bonus_value} onChange={e=>setForm({...form, bonus_value:Number(e.target.value)})} placeholder="25"/>
+                  <p className="text-xs text-gray-500">Ex: 25 = 25% das perdas devolvido como bônus.</p>
+                </div>
+                <div>
+                  <label className="text-sm text-gray-400">Depósito mínimo (R$)</label>
+                  <input type="number" step="0.01" min="0" className="w-full bg-gray-700 rounded px-3 py-2 text-sm" value={form.min_deposit} onChange={e=>setForm({...form, min_deposit:Number(e.target.value)})} placeholder="0"/>
+                </div>
+              </>
+            )}
             <div className="md:col-span-2">
               <label className="text-sm text-gray-400">Descrição</label>
               <textarea
@@ -3646,6 +3750,7 @@ function PromotionsTab({ token }: { token: string }) {
             <thead className="bg-gray-800">
               <tr>
                 <th className="text-left p-3">Título</th>
+                <th className="text-left p-3">Tipo</th>
                 <th className="text-left p-3">Link</th>
                 <th className="text-left p-3">Ordem</th>
                 <th className="text-left p-3">Válido até</th>
@@ -3657,6 +3762,11 @@ function PromotionsTab({ token }: { token: string }) {
               {items.map((p) => (
                 <tr key={p.id} className="border-t border-gray-700 hover:bg-gray-800/50">
                   <td className="p-3 font-medium">{p.title}</td>
+                  <td className="p-3">
+                    <span className={p.promotion_type === 'cashback' ? 'text-green-400' : 'text-gray-400'}>
+                      {p.promotion_type === 'cashback' ? `Cashback ${p.bonus_value || 0}%` : 'Exibição'}
+                    </span>
+                  </td>
                   <td className="p-3 text-gray-400">{p.link_url || '-'}</td>
                   <td className="p-3">{p.display_order}</td>
                   <td className="p-3">{formatDate(p.valid_until)}</td>
