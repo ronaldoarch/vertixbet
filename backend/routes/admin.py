@@ -2051,3 +2051,27 @@ async def get_public_promotions(db: Session = Depends(get_db)):
         (Promotion.valid_until == None) | (Promotion.valid_until >= now)
     )
     return q.order_by(Promotion.display_order.asc(), Promotion.id.desc()).all()
+
+
+# ========== PUBLIC NOTIFICATIONS ==========
+@public_router.get("/notifications")
+async def get_public_notifications(
+    limit: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db)
+):
+    """Lista notificações ativas para exibir na home (globais + do usuário se logado)."""
+    q = db.query(Notification).filter(Notification.is_active == True)
+    # Por enquanto só globais (user_id is null); user-specific pode ser adicionado com auth
+    q = q.filter(Notification.user_id == None)
+    notifications = q.order_by(desc(Notification.created_at)).limit(limit).all()
+    return [
+        {
+            "id": n.id,
+            "title": n.title,
+            "message": n.message,
+            "type": n.type.value,
+            "link": n.link,
+            "created_at": n.created_at.isoformat(),
+        }
+        for n in notifications
+    ]

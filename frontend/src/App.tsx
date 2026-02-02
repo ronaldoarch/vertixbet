@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Header from './components/Header';
 import HeroBanner from './components/HeroBanner';
+import NotificationsBanner from './components/NotificationsBanner';
 import SearchBar from './components/SearchBar';
 import GameCards from './components/GameCards';
 import NovidadesSection from './components/NovidadesSection';
@@ -81,6 +82,7 @@ function App() {
         <div className="flex-1 min-w-0 md:ml-[220px]">
           <main className="pb-20 md:pb-0">
             <HeroBanner />
+            <NotificationsBanner />
             <SearchBar
               filters={filters}
               onFiltersChange={handleFiltersChange}
