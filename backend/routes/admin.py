@@ -1028,47 +1028,55 @@ async def launch_game(
             detail="provider_code é obrigatório. Não foi possível determinar o provider do jogo."
         )
     
-    # IMPORTANTE: Sincronizar saldo do jogador com IGameWin antes de lançar o jogo
-    # Verificar saldo atual no IGameWin
-    igamewin_balance = await api.get_user_balance(current_user.username)
-    
-    # Se o usuário não existe no IGameWin ou tem saldo diferente, sincronizar
-    if igamewin_balance is None:
-        # Usuário não existe no IGameWin, criar e transferir saldo
-        user_created = await api.create_user(current_user.username, is_demo=False)
-        if not user_created:
-            raise HTTPException(
-                status_code=502,
-                detail=f"Erro ao criar usuário no IGameWin. {api.last_error or 'Erro desconhecido'}"
-            )
-        # Transferir saldo total (balance + bonus_balance) para o IGameWin - usuário joga com ambos
-        total_playable = current_user.balance + (getattr(current_user, "bonus_balance", 0) or 0)
-        if total_playable > 0:
-            transfer_result = await api.transfer_in(current_user.username, total_playable)
-            if not transfer_result:
+    # Em Seamless Mode: saldo é gerenciado pelo gold_api - NÃO usar transfer_in/out
+    # Em Transfer Mode: sincronizar saldo com IGameWin antes do jogo
+    agent = db.query(IGameWinAgent).filter(IGameWinAgent.is_active == True).first()
+    use_seamless = getattr(agent, "use_seamless_mode", True) if agent else True
+
+    if not use_seamless:
+        # Transfer Mode: sincronizar saldo do jogador com IGameWin
+        igamewin_balance = await api.get_user_balance(current_user.username)
+        if igamewin_balance is None:
+            user_created = await api.create_user(current_user.username, is_demo=False)
+            if not user_created:
                 raise HTTPException(
                     status_code=502,
-                    detail=f"Erro ao transferir saldo para IGameWin. {api.last_error or 'Erro desconhecido'}"
+                    detail=f"Erro ao criar usuário no IGameWin. {api.last_error or 'Erro desconhecido'}"
                 )
-    else:
-        total_local = current_user.balance + (getattr(current_user, "bonus_balance", 0) or 0)
-        if igamewin_balance != total_local:
-            # Saldos diferentes, sincronizar (balance + bonus_balance = total jogável)
-            balance_diff = total_local - igamewin_balance
-            if balance_diff > 0:
-                # Saldo local maior, transferir diferença para IGameWin
-                transfer_result = await api.transfer_in(current_user.username, balance_diff)
+            total_playable = current_user.balance + (getattr(current_user, "bonus_balance", 0) or 0)
+            if total_playable > 0:
+                transfer_result = await api.transfer_in(current_user.username, total_playable)
                 if not transfer_result:
                     raise HTTPException(
                         status_code=502,
                         detail=f"Erro ao transferir saldo para IGameWin. {api.last_error or 'Erro desconhecido'}"
                     )
-            elif balance_diff < 0:
-                # Usuário ganhou no jogo: diferença vai para balance (sacável)
-                won_amount = abs(balance_diff)
-                current_user.balance = (current_user.balance or 0) + won_amount
-                db.commit()
-                print(f"[GAME LAUNCH] Saldo sincronizado: usuário {current_user.username} ganhou R$ {won_amount:.2f}")
+        else:
+            total_local = current_user.balance + (getattr(current_user, "bonus_balance", 0) or 0)
+            if igamewin_balance != total_local:
+                balance_diff = total_local - igamewin_balance
+                if balance_diff > 0:
+                    transfer_result = await api.transfer_in(current_user.username, balance_diff)
+                    if not transfer_result:
+                        raise HTTPException(
+                            status_code=502,
+                            detail=f"Erro ao transferir saldo para IGameWin. {api.last_error or 'Erro desconhecido'}"
+                        )
+                elif balance_diff < 0:
+                    won_amount = abs(balance_diff)
+                    current_user.balance = (current_user.balance or 0) + won_amount
+                    db.commit()
+                    print(f"[GAME LAUNCH] Saldo sincronizado: usuário {current_user.username} ganhou R$ {won_amount:.2f}")
+    else:
+        # Seamless Mode: apenas criar usuário se necessário (saldo via gold_api)
+        igamewin_balance = await api.get_user_balance(current_user.username)
+        if igamewin_balance is None:
+            user_created = await api.create_user(current_user.username, is_demo=False)
+            if not user_created:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Erro ao criar usuário no IGameWin. {api.last_error or 'Erro desconhecido'}"
+                )
     
     # Gerar URL de lançamento do jogo usando user_code (username)
     launch_url = await api.launch_game(

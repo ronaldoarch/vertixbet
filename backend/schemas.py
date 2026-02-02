@@ -98,6 +98,7 @@ class IGameWinAgentBase(BaseModel):
     is_active: bool = True
     rtp: float = 96.0  # RTP do agente em % (ex: 96 = 96%)
     use_demo_mode: bool = False  # True = samples (demo), False = transfer (real)
+    use_seamless_mode: bool = True  # True = Seamless (gold_api), False = Transfer (transfer_in/out)
     credentials: Optional[str] = None
 
 
@@ -112,6 +113,7 @@ class IGameWinAgentUpdate(BaseModel):
     is_active: Optional[bool] = None
     rtp: Optional[float] = None
     use_demo_mode: Optional[bool] = None
+    use_seamless_mode: Optional[bool] = None
     credentials: Optional[str] = None
 
 

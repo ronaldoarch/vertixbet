@@ -70,6 +70,7 @@ class IGameWinAgent(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     rtp = Column(Float, default=96.0, nullable=False)  # RTP do agente em % (ex: 96 = 96%)
     use_demo_mode = Column(Boolean, default=False, nullable=False)  # True = samples/demo, False = transfer/real
+    use_seamless_mode = Column(Boolean, default=True, nullable=False)  # True = Seamless (gold_api), False = Transfer (transfer_in/out)
     credentials = Column(Text)  # JSON string with additional credentials
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
