@@ -486,7 +486,9 @@ function UsersTab({ token }: { token: string }) {
   const exportPdf = async () => {
     try {
       const { jsPDF } = await import('jspdf');
-      const { autoTable } = await import('jspdf-autotable');
+      const jspdfAutoTable = await import('jspdf-autotable') as { default?: (doc: unknown, opts: unknown) => void; autoTable?: (doc: unknown, opts: unknown) => void };
+      const autoTable = jspdfAutoTable.default ?? jspdfAutoTable.autoTable;
+      if (!autoTable) throw new Error('jspdf-autotable não carregado');
       const doc = new jsPDF();
       doc.setFontSize(16);
       doc.text('Lista de Usuários', 14, 20);
