@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, memo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
 
@@ -11,6 +11,8 @@ const BALANCE_POLL_INTERVAL_MS = 30000; // 30 segundos
 
 export default function Game() {
   const { gameCode } = useParams<{ gameCode: string }>();
+  const [searchParams] = useSearchParams();
+  const providerCode = searchParams.get('provider') || undefined;
   const navigate = useNavigate();
   const { user, token, loading: authLoading, refreshUser } = useAuth();
   const [gameUrl, setGameUrl] = useState<string | null>(null);
@@ -43,7 +45,9 @@ export default function Game() {
 
     const launchGame = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/public/games/${gameCode}/launch?lang=pt`, {
+        const params = new URLSearchParams({ lang: 'pt' });
+        if (providerCode) params.set('provider_code', providerCode);
+        const res = await fetch(`${API_URL}/api/public/games/${gameCode}/launch?${params}`, {
           headers: { 'Authorization': `Bearer ${token}` },
         });
         if (!res.ok) {
@@ -60,7 +64,7 @@ export default function Game() {
       }
     };
     launchGame();
-  }, [gameCode, token, user, authLoading]);
+  }, [gameCode, providerCode, token, user, authLoading]);
 
   if (loading) {
     return (

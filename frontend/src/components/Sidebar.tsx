@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { X, Search, ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { API_URL } from '../utils/api';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -9,16 +11,38 @@ interface SidebarProps {
   providers?: string[];
 }
 
-// Mapeamento nome exibido -> game_code da IGameWin (PGSoft usa _, Pragmatic pode usar -)
-const POPULAR_GAMES: { title: string; code: string }[] = [
-  { title: 'Fortune Tiger', code: 'fortune_tiger' },
-  { title: 'Fortune Mouse', code: 'fortune_mouse' },
-  { title: 'Fortune Ox', code: 'fortune_ox' },
-  { title: 'Gate of Olympus', code: 'gate_of_olympus' },
-  { title: 'Aviator', code: 'aviator' },
-];
+const POPULAR_TITLES = ['Fortune Tiger', 'Fortune Mouse', 'Fortune Ox', 'Gate of Olympus', 'Aviator'];
 
 export default function Sidebar({ isOpen, onClose, filters, onFiltersChange, providers = [] }: SidebarProps) {
+  const [popularGames, setPopularGames] = useState<{ title: string; code: string; provider?: string }[]>([]);
+
+  useEffect(() => {
+    const fetchPopular = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/public/games`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const games = data.games || [];
+        const found: { title: string; code: string; provider?: string }[] = [];
+        for (const title of POPULAR_TITLES) {
+          const g = games.find((x: { name?: string; title?: string }) =>
+            (x.name || x.title || '').toLowerCase().includes(title.toLowerCase())
+          );
+          if (g && g.code) {
+            found.push({
+              title: g.name || g.title || title,
+              code: g.code,
+              provider: g.provider,
+            });
+          }
+        }
+        setPopularGames(found.length > 0 ? found : POPULAR_TITLES.map(t => ({ title: t, code: t.toLowerCase().replace(/\s+/g, '-') })));
+      } catch {
+        setPopularGames(POPULAR_TITLES.map(t => ({ title: t, code: t.toLowerCase().replace(/\s+/g, '-') })));
+      }
+    };
+    fetchPopular();
+  }, []);
 
   return (
     <>
@@ -126,10 +150,10 @@ export default function Sidebar({ isOpen, onClose, filters, onFiltersChange, pro
             </div>
             <div className="px-4 pb-3">
               <ul className="space-y-1">
-                {POPULAR_GAMES.map(({ title, code }) => (
-                  <li key={code}>
+                {popularGames.map(({ title, code, provider }) => (
+                  <li key={`${code}-${provider || ''}`}>
                     <Link
-                      to={`/jogo/${code}`}
+                      to={provider ? `/jogo/${code}?provider=${encodeURIComponent(provider)}` : `/jogo/${code}`}
                       onClick={onClose}
                       className="block px-1 py-2 rounded-md text-xs hover:bg-[#0d5d4b] transition-all duration-200 text-gray-100 hover:text-white"
                     >
