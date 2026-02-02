@@ -785,7 +785,8 @@ async def igamewin_gold_api(request: Request, db: Session = Depends(get_db)):
             if not txn_id:
                 return {"status": 0, "msg": "INVALID_PARAMETER", "user_balance": round(total_balance, 2)}
 
-            existing = db.query(Bet).filter(Bet.transaction_id == txn_id).first()
+            txn_id_str = str(txn_id)  # IGameWin envia txn_id como número; Bet.transaction_id é VARCHAR
+            existing = db.query(Bet).filter(Bet.transaction_id == txn_id_str).first()
             if existing:
                 total_balance = (user.balance or 0) + (getattr(user, "bonus_balance", 0) or 0)
                 return {"status": 1, "user_balance": round(total_balance, 2)}
@@ -828,8 +829,8 @@ async def igamewin_gold_api(request: Request, db: Session = Depends(get_db)):
                 amount=bet_money,
                 win_amount=win_money,
                 status=bet_status,
-                transaction_id=txn_id,
-                external_id=txn_id,
+                transaction_id=txn_id_str,
+                external_id=txn_id_str,
                 metadata_json=json.dumps(data)
             )
             db.add(bet)
