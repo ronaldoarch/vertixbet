@@ -11,6 +11,7 @@ import TermosCondicoes from './pages/TermosCondicoes';
 import PoliticaPrivacidade from './pages/PoliticaPrivacidade';
 import PoliticaKYC from './pages/PoliticaKYC';
 import JogoResponsavel from './pages/JogoResponsavel';
+import Promocoes from './pages/Promocoes';
 import AdminRoute from './components/AdminRoute';
 import AdminLoginRoute from './components/AdminLoginRoute';
 
@@ -28,6 +29,7 @@ export default function AppRouter() {
         <Route path="/politica-de-privacidade" element={<PoliticaPrivacidade />} />
         <Route path="/politica-kyc" element={<PoliticaKYC />} />
         <Route path="/jogo-responsavel" element={<JogoResponsavel />} />
+        <Route path="/promocoes" element={<Promocoes />} />
         <Route path="/admin/login" element={
           <AdminLoginRoute>
             <AdminLogin />

@@ -14,7 +14,7 @@ from dependencies import get_current_admin_user, get_current_user
 from models import (
     User, Deposit, Withdrawal, FTD, Gateway, IGameWinAgent, FTDSettings,
     TransactionStatus, UserRole, Bet, BetStatus, Notification, NotificationType,
-    Affiliate, Theme, ProviderOrder, TrackingConfig, SiteSettings, Coupon, CouponType
+    Affiliate, Theme, ProviderOrder, TrackingConfig, SiteSettings, Coupon, CouponType, Promotion
 )
 from schemas import (
     UserResponse, UserCreate, UserUpdate,
@@ -29,7 +29,8 @@ from schemas import (
     ProviderOrderResponse, ProviderOrderCreate, ProviderOrderUpdate,
     TrackingConfigResponse, TrackingConfigCreate, TrackingConfigUpdate,
     SiteSettingsResponse, SiteSettingsCreate, SiteSettingsUpdate,
-    CouponResponse, CouponCreate, CouponUpdate
+    CouponResponse, CouponCreate, CouponUpdate,
+    PromotionResponse, PromotionCreate, PromotionUpdate
 )
 from auth import get_password_hash
 from igamewin_api import get_igamewin_api
@@ -472,6 +473,63 @@ async def delete_coupon(
     if not coupon:
         raise HTTPException(status_code=404, detail="Cupom não encontrado")
     db.delete(coupon)
+    db.commit()
+
+
+# ========== PROMOTIONS ==========
+@router.get("/promotions", response_model=List[PromotionResponse])
+async def get_promotions(
+    is_active: Optional[bool] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    q = db.query(Promotion)
+    if is_active is not None:
+        q = q.filter(Promotion.is_active == is_active)
+    return q.order_by(Promotion.display_order.asc(), Promotion.id.desc()).all()
+
+
+@router.post("/promotions", response_model=PromotionResponse, status_code=status.HTTP_201_CREATED)
+async def create_promotion(
+    data: PromotionCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    promotion = Promotion(**data.model_dump())
+    db.add(promotion)
+    db.commit()
+    db.refresh(promotion)
+    return promotion
+
+
+@router.put("/promotions/{promotion_id}", response_model=PromotionResponse)
+async def update_promotion(
+    promotion_id: int,
+    data: PromotionUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    promotion = db.query(Promotion).filter(Promotion.id == promotion_id).first()
+    if not promotion:
+        raise HTTPException(status_code=404, detail="Promoção não encontrada")
+    update_data = data.model_dump(exclude_unset=True)
+    for k, v in update_data.items():
+        setattr(promotion, k, v)
+    db.commit()
+    db.refresh(promotion)
+    return promotion
+
+
+@router.delete("/promotions/{promotion_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_promotion(
+    promotion_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    promotion = db.query(Promotion).filter(Promotion.id == promotion_id).first()
+    if not promotion:
+        raise HTTPException(status_code=404, detail="Promoção não encontrada")
+    db.delete(promotion)
     db.commit()
 
 
@@ -1982,3 +2040,17 @@ async def get_public_site_setting(
     if not setting:
         return {"key": key, "value": None}
     return {"key": setting.key, "value": setting.value}
+
+
+# ========== PUBLIC PROMOTIONS ==========
+@public_router.get("/promotions", response_model=List[PromotionResponse])
+async def get_public_promotions(db: Session = Depends(get_db)):
+    """Lista promoções ativas para o usuário (público, sem autenticação)."""
+    now = datetime.utcnow()
+    q = db.query(Promotion).filter(Promotion.is_active == True)
+    q = q.filter(
+        (Promotion.valid_from == None) | (Promotion.valid_from <= now)
+    ).filter(
+        (Promotion.valid_until == None) | (Promotion.valid_until >= now)
+    )
+    return q.order_by(Promotion.display_order.asc(), Promotion.id.desc()).all()

@@ -53,32 +53,25 @@ export default function Sidebar({ isOpen, onClose, filters, onFiltersChange, pro
           {/* Promoções */}
           <div className="border-b border-[#0d5d4b]">
             <div className="px-4 py-3 space-y-3">
-              {/* Gire e ganhe - com animação neon e borda amarela */}
-              <button className="neon-button w-full relative bg-gray-800 border-2 border-yellow-500 rounded-lg p-4 text-left hover:border-yellow-400 transition-all duration-200 overflow-hidden group">
+              {/* Depositar - com animação neon */}
+              <a
+                href="/depositar"
+                className="neon-button block w-full relative bg-gray-800 border-2 border-yellow-500 rounded-lg p-4 text-left hover:border-yellow-400 transition-all duration-200 overflow-hidden group"
+              >
                 <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/50 to-yellow-500/0 animate-shimmer"></div>
                 <div className="relative flex items-center justify-between">
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs text-gray-400 font-semibold uppercase mb-1.5 leading-tight">Gire e ganhe</div>
-                    <div className="text-base font-bold text-white leading-tight">Slot da Sorte</div>
-                  </div>
-                </div>
-              </button>
-
-              {/* Cashback */}
-              <button className="w-full bg-blue-600 rounded-lg p-4 text-left hover:bg-blue-700 transition-all duration-200 border-2 border-blue-600 hover:border-blue-500 hover:shadow-lg">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs text-blue-100 font-semibold uppercase mb-1.5 leading-tight">Cashback 25%</div>
                     <div className="text-base font-bold text-white leading-tight">Depositar</div>
                   </div>
                 </div>
-              </button>
+              </a>
 
-              {/* Promoções */}
+              {/* Promoções - com animação neon */}
               <a
                 href="/promocoes"
-                className="block w-full bg-blue-600 rounded-lg p-4 text-left hover:bg-blue-700 transition-all duration-200 border-2 border-blue-600 hover:border-blue-500 hover:shadow-lg"
+                className="neon-button block w-full relative bg-gray-800 border-2 border-yellow-500 rounded-lg p-4 text-left hover:border-yellow-400 transition-all duration-200 overflow-hidden group"
               >
+                <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/50 to-yellow-500/0 animate-shimmer"></div>
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
                     <div className="text-xs text-blue-100 font-semibold uppercase mb-1.5 leading-tight">Acesse as</div>

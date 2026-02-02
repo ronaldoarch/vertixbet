@@ -301,6 +301,22 @@ class CouponType(str, enum.Enum):
     FIXED = "fixed"
 
 
+class Promotion(Base):
+    __tablename__ = "promotions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    image_url = Column(String(500), nullable=True)  # URL da imagem/banner
+    link_url = Column(String(500), nullable=True)  # Link externo ou rota (ex: /depositar)
+    display_order = Column(Integer, default=0, nullable=False)  # Ordem de exibição
+    is_active = Column(Boolean, default=True, nullable=False)
+    valid_from = Column(DateTime, nullable=True)
+    valid_until = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class Coupon(Base):
     __tablename__ = "coupons"
     

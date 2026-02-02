@@ -255,6 +255,12 @@ export default function Admin() {
                 onClick={() => setActiveTab('coupons')}
               />
               <NavSubItem
+                icon={<Gift />}
+                label="Promoções"
+                active={activeTab === 'promotions'}
+                onClick={() => setActiveTab('promotions')}
+              />
+              <NavSubItem
                 icon={<ImageIcon />}
                 label="Branding"
                 active={activeTab === 'branding'}
@@ -318,6 +324,7 @@ export default function Admin() {
           {activeTab === 'bets' && <BetsTab token={token || ''} />}
           {activeTab === 'notifications' && <NotificationsTab token={token || ''} />}
           {activeTab === 'coupons' && <CouponsTab token={token || ''} />}
+          {activeTab === 'promotions' && <PromotionsTab token={token || ''} />}
         </main>
       </div>
     </div>
@@ -3274,6 +3281,307 @@ function ProviderOrderSection({ token, providers, loadingGames }: { token: strin
               )}
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PromotionsTab({ token }: { token: string }) {
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState({
+    title: '',
+    description: '',
+    image_url: '',
+    link_url: '',
+    display_order: 0,
+    is_active: true,
+    valid_from: '',
+    valid_until: '',
+  });
+
+  const fetchPromotions = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_URL}/api/admin/promotions`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Falha ao carregar promoções');
+      setItems(await res.json());
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openEdit = (p: any) => {
+    setEditingId(p.id);
+    setShowForm(true);
+    setForm({
+      title: p.title || '',
+      description: p.description || '',
+      image_url: p.image_url || '',
+      link_url: p.link_url || '',
+      display_order: p.display_order ?? 0,
+      is_active: p.is_active ?? true,
+      valid_from: p.valid_from ? p.valid_from.slice(0, 16) : '',
+      valid_until: p.valid_until ? p.valid_until.slice(0, 16) : '',
+    });
+  };
+
+  const cancelForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setForm({ title: '', description: '', image_url: '', link_url: '', display_order: 0, is_active: true, valid_from: '', valid_until: '' });
+    setError('');
+  };
+
+  const savePromotion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.title.trim()) {
+      setError('Título é obrigatório');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const body: any = {
+        title: form.title.trim(),
+        description: form.description.trim() || null,
+        image_url: form.image_url.trim() || null,
+        link_url: form.link_url.trim() || null,
+        display_order: form.display_order,
+        is_active: form.is_active,
+      };
+      if (form.valid_from) body.valid_from = form.valid_from + ':00';
+      if (form.valid_until) body.valid_until = form.valid_until + ':00';
+      const url = editingId ? `${API_URL}/api/admin/promotions/${editingId}` : `${API_URL}/api/admin/promotions`;
+      const res = await fetch(url, {
+        method: editingId ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Falha ao salvar');
+      }
+      await fetchPromotions();
+      cancelForm();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleActive = async (p: any) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/promotions/${p.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ is_active: !p.is_active }),
+      });
+      if (!res.ok) throw new Error('Falha ao atualizar');
+      await fetchPromotions();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deletePromotion = async (id: number) => {
+    if (!confirm('Excluir esta promoção?')) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/promotions/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Falha ao excluir');
+      await fetchPromotions();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPromotions();
+  }, []);
+
+  const formatDate = (s: string) => {
+    if (!s) return '-';
+    try {
+      const d = new Date(s);
+      return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return s || '-';
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold">Promoções</h2>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => (showForm ? cancelForm() : setShowForm(true))}
+            className="px-3 py-2 bg-[#d4af37] hover:bg-[#c5a028] text-black rounded font-semibold"
+          >
+            {showForm ? 'Cancelar' : 'Nova Promoção'}
+          </button>
+          <button onClick={fetchPromotions} className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded">
+            <RefreshCw size={18} /> Atualizar
+          </button>
+        </div>
+      </div>
+      {error && <div className="text-red-400">{error}</div>}
+      {showForm && (
+        <form onSubmit={savePromotion} className="bg-gray-800/60 p-4 rounded border border-gray-700 space-y-3">
+          <h3 className="font-semibold">{editingId ? 'Editar promoção' : 'Criar promoção'}</h3>
+          <div className="grid md:grid-cols-2 gap-3">
+            <div className="md:col-span-2">
+              <label className="text-sm text-gray-400">Título *</label>
+              <input
+                className="w-full bg-gray-700 rounded px-3 py-2 text-sm"
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                placeholder="Ex: Cashback 25%"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="text-sm text-gray-400">Descrição</label>
+              <textarea
+                className="w-full bg-gray-700 rounded px-3 py-2 text-sm"
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                placeholder="Detalhes da promoção"
+                rows={3}
+              />
+            </div>
+            <div>
+              <label className="text-sm text-gray-400">URL da imagem</label>
+              <input
+                className="w-full bg-gray-700 rounded px-3 py-2 text-sm"
+                value={form.image_url}
+                onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+                placeholder="https://..."
+              />
+            </div>
+            <div>
+              <label className="text-sm text-gray-400">Link (ex: /depositar)</label>
+              <input
+                className="w-full bg-gray-700 rounded px-3 py-2 text-sm"
+                value={form.link_url}
+                onChange={(e) => setForm({ ...form, link_url: e.target.value })}
+                placeholder="/depositar ou https://..."
+              />
+            </div>
+            <div>
+              <label className="text-sm text-gray-400">Ordem de exibição</label>
+              <input
+                type="number"
+                className="w-full bg-gray-700 rounded px-3 py-2 text-sm"
+                value={form.display_order}
+                onChange={(e) => setForm({ ...form, display_order: Number(e.target.value) })}
+              />
+            </div>
+            <div>
+              <label className="text-sm text-gray-400">Válido de</label>
+              <input
+                type="datetime-local"
+                className="w-full bg-gray-700 rounded px-3 py-2 text-sm"
+                value={form.valid_from}
+                onChange={(e) => setForm({ ...form, valid_from: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-sm text-gray-400">Válido até</label>
+              <input
+                type="datetime-local"
+                className="w-full bg-gray-700 rounded px-3 py-2 text-sm"
+                value={form.valid_until}
+                onChange={(e) => setForm({ ...form, valid_until: e.target.value })}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={form.is_active}
+                onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
+              />
+              <span className="text-sm">Ativa (visível para usuários)</span>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button type="submit" className="px-4 py-2 bg-[#ff6b35] hover:bg-[#ff7b35] text-white rounded font-semibold">
+              {editingId ? 'Salvar' : 'Criar promoção'}
+            </button>
+            {editingId && (
+              <button type="button" onClick={cancelForm} className="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded font-semibold">
+                Cancelar
+              </button>
+            )}
+          </div>
+        </form>
+      )}
+      {loading && !items.length && <div className="text-gray-400">Carregando...</div>}
+      {!loading && items.length === 0 && !showForm && (
+        <div className="bg-gray-800/60 p-6 rounded border border-gray-700 text-center text-gray-400">
+          Nenhuma promoção cadastrada. Clique em Nova Promoção para criar.
+        </div>
+      )}
+      {items.length > 0 && (
+        <div className="overflow-x-auto rounded border border-gray-700">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-800">
+              <tr>
+                <th className="text-left p-3">Título</th>
+                <th className="text-left p-3">Link</th>
+                <th className="text-left p-3">Ordem</th>
+                <th className="text-left p-3">Válido até</th>
+                <th className="text-left p-3">Ativa</th>
+                <th className="text-left p-3">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((p) => (
+                <tr key={p.id} className="border-t border-gray-700 hover:bg-gray-800/50">
+                  <td className="p-3 font-medium">{p.title}</td>
+                  <td className="p-3 text-gray-400">{p.link_url || '-'}</td>
+                  <td className="p-3">{p.display_order}</td>
+                  <td className="p-3">{formatDate(p.valid_until)}</td>
+                  <td className="p-3">
+                    <button
+                      type="button"
+                      onClick={() => toggleActive(p)}
+                      className={`px-2 py-1 rounded text-xs font-medium ${p.is_active ? 'bg-green-600/80 text-white' : 'bg-gray-600 text-gray-300'}`}
+                    >
+                      {p.is_active ? 'Ativa' : 'Inativa'}
+                    </button>
+                  </td>
+                  <td className="p-3 flex gap-2">
+                    <button type="button" onClick={() => openEdit(p)} className="text-[#d4af37] hover:text-[#c5a028] text-xs">
+                      Editar
+                    </button>
+                    <button type="button" onClick={() => deletePromotion(p.id)} className="text-red-400 hover:text-red-300 text-xs">
+                      Excluir
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
