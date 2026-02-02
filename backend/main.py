@@ -28,10 +28,15 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
 app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
 
 # Configurar CORS - permite variáveis de ambiente para produção
+# Domínios de produção sempre incluídos para evitar bloqueio
+PRODUCTION_ORIGINS = [
+    "https://vertixbet.site",
+    "https://www.vertixbet.site",
+    "https://api.vertixbet.site",
+]
 cors_origins_env = os.getenv("CORS_ORIGINS", "").strip()
-cors_origins = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()] if cors_origins_env else []
+cors_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()] if cors_origins_env else []
 
-# Se não houver variável, usa defaults de desenvolvimento
 if not cors_origins:
     cors_origins = [
         "http://localhost:5173",
@@ -40,14 +45,13 @@ if not cors_origins:
         "http://127.0.0.1:5173",
         "http://127.0.0.1:5174",
         "http://127.0.0.1:3000",
-        # Domínios de produção
-        "https://vertixbet.site",
-        "https://www.vertixbet.site",
-        "https://api.vertixbet.site",
-        # Permite qualquer origem do domínio agenciamidas.com em produção (legado)
-        "https://*.agenciamidas.com",
-        "http://*.agenciamidas.com",
+        *PRODUCTION_ORIGINS,
     ]
+else:
+    # Mesclar origens de produção (evita CORS bloqueado se CORS_ORIGINS estiver incompleto)
+    for origin in PRODUCTION_ORIGINS:
+        if origin not in cors_origins:
+            cors_origins.append(origin)
 
 app.add_middleware(
     CORSMiddleware,
@@ -56,6 +60,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Include routers
