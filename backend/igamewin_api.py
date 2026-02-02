@@ -13,11 +13,13 @@ class IGameWinAPI:
         api_url: str = "https://igamewin.com",
         credentials: Optional[Dict[str, Any]] = None,
         rtp: float = 96.0,
+        use_demo_mode: bool = False,
     ):
         self.agent_code = agent_code
         self.agent_key = agent_key  # maps to agent_token in requests
         self.api_url = api_url.rstrip('/')
         self.rtp = rtp
+        self.use_demo_mode = use_demo_mode  # True = samples (demo), False = transfer (real)
         # Detect base url for /api/v1 according to doc
         if self.api_url.endswith("/api/v1"):
             self.base_url = self.api_url
@@ -33,7 +35,7 @@ class IGameWinAPI:
             "Content-Type": "application/json"
         }
     
-    async def create_user(self, user_code: str, is_demo: bool = False) -> Optional[Dict[str, Any]]:
+    async def create_user(self, user_code: str, is_demo: Optional[bool] = None) -> Optional[Dict[str, Any]]:
         """Create user in igamewin system - follows IGameWin API documentation"""
         payload = {
             "method": "user_create",
@@ -41,7 +43,8 @@ class IGameWinAPI:
             "agent_token": self.agent_key,
             "user_code": user_code
         }
-        if is_demo:
+        use_demo = is_demo if is_demo is not None else self.use_demo_mode
+        if use_demo:
             payload["is_demo"] = True
         
         data = await self._post(payload)
@@ -237,10 +240,12 @@ def get_igamewin_api(db: Session) -> Optional[IGameWinAPI]:
     rtp = getattr(agent, "rtp", 96.0)
     if rtp is None:
         rtp = 96.0
+    use_demo_mode = getattr(agent, "use_demo_mode", False) or False
     return IGameWinAPI(
         agent_code=agent.agent_code,
         agent_key=agent.agent_key,
         api_url=agent.api_url,
         credentials=credentials_dict,
         rtp=float(rtp),
+        use_demo_mode=use_demo_mode,
     )

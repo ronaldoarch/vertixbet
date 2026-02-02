@@ -93,6 +93,16 @@ def init_db():
             conn.commit()
     except Exception:
         pass
+    # Migração: use_demo_mode em igamewin_agents
+    try:
+        with engine.connect() as conn:
+            if "sqlite" in DATABASE_URL:
+                conn.execute(text("ALTER TABLE igamewin_agents ADD COLUMN use_demo_mode INTEGER DEFAULT 0"))
+            else:
+                conn.execute(text("ALTER TABLE igamewin_agents ADD COLUMN IF NOT EXISTS use_demo_mode BOOLEAN DEFAULT FALSE"))
+            conn.commit()
+    except Exception:
+        pass
     # Migração: promotion_type, bonus_value, min_deposit em promotions
     try:
         with engine.connect() as conn:

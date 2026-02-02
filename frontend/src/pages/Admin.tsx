@@ -992,7 +992,7 @@ function IGameWinTab({ token }: { token: string }) {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ agent_code: '', agent_key: '', api_url: 'https://api.igamewin.com', credentials: '', is_active: true, rtp: 96 });
+  const [form, setForm] = useState({ agent_code: '', agent_key: '', api_url: 'https://api.igamewin.com', credentials: '', is_active: true, rtp: 96, use_demo_mode: false });
   const [editingId, setEditingId] = useState<number | null>(null);
   const [games, setGames] = useState<any[]>([]);
   const [providers, setProviders] = useState<any[]>([]);
@@ -1117,7 +1117,7 @@ function IGameWinTab({ token }: { token: string }) {
       
       // Limpar formulário e recarregar dados
       setEditingId(null);
-      setForm({ agent_code: '', agent_key: '', api_url: 'https://api.igamewin.com', credentials: '', is_active: true, rtp: 96 });
+      setForm({ agent_code: '', agent_key: '', api_url: 'https://api.igamewin.com', credentials: '', is_active: true, rtp: 96, use_demo_mode: false });
       await fetchData();
       
       // Aguardar um pouco para garantir que o banco foi atualizado
@@ -1142,7 +1142,8 @@ function IGameWinTab({ token }: { token: string }) {
       api_url: agent.api_url || 'https://api.igamewin.com',
       credentials: agent.credentials || '',
       is_active: agent.is_active !== undefined ? agent.is_active : true,
-      rtp: agent.rtp != null ? Number(agent.rtp) : 96
+      rtp: agent.rtp != null ? Number(agent.rtp) : 96,
+      use_demo_mode: agent.use_demo_mode ?? false
     });
     // Scroll para o formulário
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1150,7 +1151,7 @@ function IGameWinTab({ token }: { token: string }) {
 
   const resetForm = () => {
     setEditingId(null);
-    setForm({ agent_code: '', agent_key: '', api_url: 'https://api.igamewin.com', credentials: '', is_active: true, rtp: 96 });
+    setForm({ agent_code: '', agent_key: '', api_url: 'https://api.igamewin.com', credentials: '', is_active: true, rtp: 96, use_demo_mode: false });
   };
 
   const deleteAgent = async (agentId: number) => {
@@ -1196,7 +1197,7 @@ function IGameWinTab({ token }: { token: string }) {
 
     if (items.length === 0) {
       // Se não há agentes, limpar formulário
-      setForm({ agent_code: '', agent_key: '', api_url: 'https://api.igamewin.com', credentials: '', is_active: true, rtp: 96 });
+      setForm({ agent_code: '', agent_key: '', api_url: 'https://api.igamewin.com', credentials: '', is_active: true, rtp: 96, use_demo_mode: false });
       setGames([]);
       setProviders([]);
       setAgentBalance(null);
@@ -1231,7 +1232,8 @@ function IGameWinTab({ token }: { token: string }) {
         api_url: agent.api_url || 'https://api.igamewin.com',
         credentials: agent.credentials || '',
         is_active: agent.is_active !== undefined ? agent.is_active : true,
-        rtp: agent.rtp != null ? Number(agent.rtp) : 96
+        rtp: agent.rtp != null ? Number(agent.rtp) : 96,
+        use_demo_mode: agent.use_demo_mode ?? false
       };
       setForm(newForm);
     }
@@ -1376,11 +1378,20 @@ function IGameWinTab({ token }: { token: string }) {
           />
           <p className="text-xs text-gray-500 mt-1">Return to Player. Valor entre 0 e 100 (ex: 96 = 96%). Enviado ao provedor no lançamento do jogo.</p>
         </div>
-        <textarea className="bg-gray-700 rounded px-3 py-2 text-sm md:col-span-2" placeholder="Credenciais extras (JSON)" value={form.credentials} onChange={e=>setForm({...form, credentials:e.target.value})}/>
-        <div className="flex items-center gap-2">
-          <input type="checkbox" checked={form.is_active} onChange={e=>setForm({...form, is_active:e.target.checked})}/>
-          <span>Ativo</span>
+        <div className="flex flex-wrap gap-4 items-center">
+          <div className="flex items-center gap-2">
+            <input type="checkbox" checked={form.is_active} onChange={e=>setForm({...form, is_active:e.target.checked})}/>
+            <span>Ativo</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="checkbox" id="use_demo_mode" checked={form.use_demo_mode ?? false} onChange={e=>setForm({...form, use_demo_mode:e.target.checked})}/>
+            <label htmlFor="use_demo_mode" className="cursor-pointer">
+              Modo Samples (Demo)
+            </label>
+          </div>
         </div>
+        <p className="text-xs text-amber-400/90 md:col-span-2">Modo Samples: usuários jogam com créditos demo. Modo Transfer: dinheiro real (user_deposit/user_withdraw).</p>
+        <textarea className="bg-gray-700 rounded px-3 py-2 text-sm md:col-span-2" placeholder="Credenciais extras (JSON)" value={form.credentials} onChange={e=>setForm({...form, credentials:e.target.value})}/>
         <div className="md:col-span-2 flex gap-2">
           <button onClick={create} disabled={loading} className="flex-1 bg-[#ff6b35] hover:bg-[#ff7b35] disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-2 rounded font-semibold">
             {editingId ? 'Atualizar agente' : 'Salvar agente'}
@@ -1415,6 +1426,7 @@ function IGameWinTab({ token }: { token: string }) {
                     </div>
                     <div className="text-sm text-gray-400">API: {agent.api_url}</div>
                     <div className="text-sm text-gray-400">RTP: {agent.rtp != null ? `${Number(agent.rtp)}%` : '96%'}</div>
+                    <div className="text-sm text-gray-400">Modo: {agent.use_demo_mode ? 'Samples (Demo)' : 'Transfer (Real)'}</div>
                     <div className="text-sm text-gray-400">Status: {agent.is_active ? 'Ativo' : 'Inativo'}</div>
                     {agent.agent_key && (
                       <div className="text-xs text-gray-500 mt-1">Agent Key: {agent.agent_key.substring(0, 10)}...</div>

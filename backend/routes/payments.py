@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from database import get_db
 from sqlalchemy import func
-from models import User, Deposit, Withdrawal, Gateway, TransactionStatus, Bet, BetStatus, Affiliate, FTDSettings, FTD, Coupon, CouponType, SiteSettings, Promotion
+from models import User, Deposit, Withdrawal, Gateway, TransactionStatus, Bet, BetStatus, Affiliate, FTDSettings, FTD, Coupon, CouponType, SiteSettings, Promotion, IGameWinAgent
 from suitpay_api import SuitPayAPI
 from schemas import DepositResponse, WithdrawalResponse, DepositPixRequest, WithdrawalPixRequest, AffiliateResponse
 from dependencies import get_current_user
@@ -18,6 +18,7 @@ import os
 
 router = APIRouter(prefix="/api/public/payments", tags=["payments"])
 webhook_router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
+gold_api_router = APIRouter(tags=["igamewin-seamless"])  # Sem prefix - rota /gold_api
 affiliate_router = APIRouter(prefix="/api/public/affiliate", tags=["affiliate"])
 
 
@@ -707,6 +708,142 @@ async def webhook_pix_cashout(request: Request, db: Session = Depends(get_db)):
     except Exception as e:
         print(f"Erro ao processar webhook PIX Cash-out: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erro ao processar webhook: {str(e)}")
+
+
+# ========== IGameWin Seamless Mode - gold_api (Site Endpoint) ==========
+def _validate_igamewin_seamless(data: dict, db: Session) -> Optional[IGameWinAgent]:
+    """Valida agent_code e agent_secret/agent_token contra o agente ativo"""
+    agent_code = data.get("agent_code")
+    received_secret = data.get("agent_secret") or data.get("agent_token")
+    if not agent_code or not received_secret:
+        return None
+    agent = db.query(IGameWinAgent).filter(
+        IGameWinAgent.agent_code == agent_code,
+        IGameWinAgent.is_active == True
+    ).first()
+    if not agent:
+        return None
+    # IGameWin Seamless usa agent_secret; aceita agent_key ou credentials.agent_secret
+    creds = {}
+    if agent.credentials:
+        try:
+            creds = json.loads(agent.credentials) or {}
+        except Exception:
+            pass
+    expected_secret = creds.get("agent_secret") or agent.agent_key
+    if received_secret != expected_secret:
+        return None
+    return agent
+
+
+@gold_api_router.post("/gold_api")
+async def igamewin_gold_api(request: Request, db: Session = Depends(get_db)):
+    """
+    IGameWin Seamless API - Site Endpoint (gold_api).
+    IGameWin chama este endpoint com method=user_balance ou method=transaction.
+    Site Endpoint no painel: https://api.vertixbet.site (não incluir /gold_api)
+    """
+    try:
+        data = await request.json()
+        method = data.get("method")
+        if not method:
+            return {"status": 0, "msg": "INVALID_PARAMETER", "user_balance": 0}
+
+        agent = _validate_igamewin_seamless(data, db)
+        if not agent:
+            return {"status": 0, "msg": "INVALID_AGENT", "user_balance": 0}
+
+        user_code = data.get("user_code")
+        if not user_code:
+            return {"status": 0, "msg": "INVALID_PARAMETER", "user_balance": 0}
+
+        user = db.query(User).filter(User.username == user_code).first()
+        if not user:
+            return {"status": 0, "msg": "INVALID_USER", "user_balance": 0}
+
+        total_balance = (user.balance or 0) + (getattr(user, "bonus_balance", 0) or 0)
+
+        if method == "user_balance":
+            return {"status": 1, "user_balance": round(total_balance, 2)}
+
+        if method == "transaction":
+            game_type = data.get("game_type", "slot")
+            slot_data = data.get("slot") or data.get("live") or data.get(game_type)
+            if not slot_data:
+                return {"status": 0, "msg": "INVALID_PARAMETER", "user_balance": round(total_balance, 2)}
+
+            bet_money = float(slot_data.get("bet_money") or slot_data.get("bet") or 0)
+            win_money = float(slot_data.get("win_money") or slot_data.get("win") or 0)
+            txn_id = slot_data.get("txn_id") or slot_data.get("transaction_id")
+            txn_type = slot_data.get("txn_type", "debit_credit")
+
+            if txn_type == "debit":
+                win_money = 0
+            elif txn_type == "credit":
+                bet_money = 0
+
+            if not txn_id:
+                return {"status": 0, "msg": "INVALID_PARAMETER", "user_balance": round(total_balance, 2)}
+
+            existing = db.query(Bet).filter(Bet.transaction_id == txn_id).first()
+            if existing:
+                total_balance = (user.balance or 0) + (getattr(user, "bonus_balance", 0) or 0)
+                return {"status": 1, "user_balance": round(total_balance, 2)}
+
+            total_available = (user.balance or 0) + (getattr(user, "bonus_balance", 0) or 0)
+            if bet_money > 0 and total_available < bet_money:
+                return {"status": 0, "msg": "INSUFFICIENT_USER_FUNDS", "user_balance": round(total_available, 2)}
+
+            bonus_bal = getattr(user, "bonus_balance", 0) or 0
+            to_deduct = bet_money
+            if bonus_bal >= to_deduct:
+                user.bonus_balance = bonus_bal - to_deduct
+            elif bonus_bal > 0:
+                user.bonus_balance = 0
+                user.balance = (user.balance or 0) - (to_deduct - bonus_bal)
+            else:
+                user.balance = (user.balance or 0) - to_deduct
+
+            if win_money > 0:
+                user.balance = (user.balance or 0) + win_money
+            else:
+                cashback_promo = db.query(Promotion).filter(
+                    Promotion.promotion_type == "cashback",
+                    Promotion.is_active == True,
+                    (Promotion.valid_from == None) | (Promotion.valid_from <= datetime.utcnow()),
+                    (Promotion.valid_until == None) | (Promotion.valid_until >= datetime.utcnow()),
+                    Promotion.bonus_value > 0
+                ).order_by(Promotion.display_order.desc()).first()
+                if cashback_promo:
+                    cashback_amount = round(bet_money * (cashback_promo.bonus_value / 100.0), 2)
+                    if cashback_amount > 0:
+                        user.bonus_balance = (getattr(user, "bonus_balance", 0) or 0) + cashback_amount
+
+            bet_status = BetStatus.WON if win_money > 0 else BetStatus.LOST
+            bet = Bet(
+                user_id=user.id,
+                game_id=slot_data.get("game_code"),
+                game_name=slot_data.get("game_code"),
+                provider=slot_data.get("provider_code", "IGameWin"),
+                amount=bet_money,
+                win_amount=win_money,
+                status=bet_status,
+                transaction_id=txn_id,
+                external_id=txn_id,
+                metadata_json=json.dumps(data)
+            )
+            db.add(bet)
+            db.commit()
+            db.refresh(user)
+            total_balance = (user.balance or 0) + (getattr(user, "bonus_balance", 0) or 0)
+            return {"status": 1, "user_balance": round(total_balance, 2)}
+
+        return {"status": 0, "msg": "INVALID_METHOD", "user_balance": 0}
+    except Exception as e:
+        print(f"[gold_api] Erro: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"status": 0, "msg": "INTERNAL_ERROR", "user_balance": 0}
 
 
 @webhook_router.post("/igamewin/bet")

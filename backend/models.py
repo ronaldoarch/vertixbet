@@ -69,6 +69,7 @@ class IGameWinAgent(Base):
     api_url = Column(String(255), default="https://api.igamewin.com", nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     rtp = Column(Float, default=96.0, nullable=False)  # RTP do agente em % (ex: 96 = 96%)
+    use_demo_mode = Column(Boolean, default=False, nullable=False)  # True = samples/demo, False = transfer/real
     credentials = Column(Text)  # JSON string with additional credentials
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

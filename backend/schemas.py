@@ -97,6 +97,7 @@ class IGameWinAgentBase(BaseModel):
     api_url: str = "https://api.igamewin.com"
     is_active: bool = True
     rtp: float = 96.0  # RTP do agente em % (ex: 96 = 96%)
+    use_demo_mode: bool = False  # True = samples (demo), False = transfer (real)
     credentials: Optional[str] = None
 
 
@@ -110,6 +111,7 @@ class IGameWinAgentUpdate(BaseModel):
     api_url: Optional[str] = None
     is_active: Optional[bool] = None
     rtp: Optional[float] = None
+    use_demo_mode: Optional[bool] = None
     credentials: Optional[str] = None
 
 
