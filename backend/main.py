@@ -56,7 +56,7 @@ else:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_origin_regex=r"https?://(.*\.)?(vertixbet\.site|agenciamidas\.com)",
+    allow_origin_regex=r"https?://(.*\.)?(vertixbet\.site|agenciamidas\.com|igamewin\.com)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

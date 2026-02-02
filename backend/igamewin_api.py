@@ -1,5 +1,6 @@
 import httpx
 import json
+import os
 from typing import Optional, Dict, Any, List
 from models import IGameWinAgent
 from sqlalchemy.orm import Session
@@ -193,8 +194,10 @@ class IGameWinAPI:
             return None
         return data.get("games")
 
-    async def launch_game(self, user_code: str, game_code: str, provider_code: Optional[str] = None, lang: str = "pt") -> Optional[str]:
-        """Generate game launch URL for user - follows IGameWin API documentation"""
+    async def launch_game(self, user_code: str, game_code: str, provider_code: Optional[str] = None, lang: str = "pt", site_url: Optional[str] = None) -> Optional[str]:
+        """Generate game launch URL for user - follows IGameWin API documentation.
+        Em Seamless Mode, site_url (base do gold_api, ex: https://api.vertixbet.site) pode ser
+        necessário para o jogo saber onde chamar. Use SITE_ENDPOINT_URL se não informado."""
         payload: Dict[str, Any] = {
             "method": "game_launch",
             "agent_code": self.agent_code,
@@ -205,6 +208,12 @@ class IGameWinAPI:
         }
         if provider_code:
             payload["provider_code"] = provider_code
+        # Seamless: URL do gold_api - evita f= vazio e erro formatarURL no jogo
+        base = (site_url or os.getenv("SITE_ENDPOINT_URL", "https://api.vertixbet.site")).rstrip("/")
+        if base:
+            gold_api_url = f"{base}/gold_api"
+            payload["site_url"] = base
+            payload["f"] = gold_api_url  # Parâmetro f na URL do jogo (callback gold_api)
         # RTP do agente (se a API do provedor aceitar, envia para configurar o jogo)
         if getattr(self, "rtp", None) is not None and 0 <= self.rtp <= 100:
             payload["rtp"] = self.rtp
