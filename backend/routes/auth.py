@@ -72,7 +72,7 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
     if not email or not str(email).strip():
         import time
         base = username.replace("+", "")[:15]
-        email = f"user_{base}_{int(time.time())}@placeholder.local"
+        email = f"user_{base}_{int(time.time())}@example.com"
 
     referred_by_affiliate_id = None
     if getattr(user_data, "affiliate_code", None) and str(user_data.affiliate_code).strip():

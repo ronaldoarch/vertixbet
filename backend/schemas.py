@@ -43,7 +43,9 @@ class UserResponse(UserBase):
     display_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
-    
+    # email como str para aceitar placeholders (ex: user_xxx@example.com)
+    email: Optional[str] = None
+
     class Config:
         from_attributes = True
 
