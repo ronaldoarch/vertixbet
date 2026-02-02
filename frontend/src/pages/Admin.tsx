@@ -203,16 +203,10 @@ export default function Admin() {
                 onClick={() => setActiveTab('ggr')}
               />
               <NavSubItem
-                icon={<ArrowUpCircle />}
-                label="Saques"
-                active={activeTab === 'withdrawals'}
-                onClick={() => setActiveTab('withdrawals')}
-              />
-              <NavSubItem
-                icon={<ArrowDownCircle />}
-                label="Depositos"
-                active={activeTab === 'deposits'}
-                onClick={() => setActiveTab('deposits')}
+                icon={<DollarSign />}
+                label="Depósitos e Saques"
+                active={activeTab === 'transactions'}
+                onClick={() => setActiveTab('transactions')}
               />
               <NavSubItem
                 icon={<FileText />}
@@ -271,12 +265,6 @@ export default function Admin() {
                 onClick={() => setActiveTab('gateways')}
               />
               <NavSubItem
-                icon={<TrendingUp />}
-                label="FTDs"
-                active={activeTab === 'ftds'}
-                onClick={() => setActiveTab('ftds')}
-              />
-              <NavSubItem
                 icon={<Gamepad2 />}
                 label="IGameWin"
                 active={activeTab === 'igamewin'}
@@ -308,9 +296,7 @@ export default function Admin() {
         <main className="flex-1 p-6">
           {activeTab === 'dashboard' && <DashboardTab stats={stats} loading={loading} />}
           {activeTab === 'users' && <UsersTab token={token || ''} />}
-          {activeTab === 'deposits' && <DepositsTab token={token || ''} />}
-          {activeTab === 'withdrawals' && <WithdrawalsTab token={token || ''} />}
-          {activeTab === 'ftds' && <FTDsTab token={token || ''} />}
+          {activeTab === 'transactions' && <TransactionsTab token={token || ''} />}
           {activeTab === 'gateways' && <GatewaysTab token={token || ''} />}
           {activeTab === 'igamewin' && <IGameWinTab token={token || ''} />}
           {activeTab === 'affiliates' && <AffiliatesTab token={token || ''} />}
@@ -559,89 +545,97 @@ function UsersTab({ token }: { token: string }) {
   );
 }
 
-function DepositsTab({ token }: { token: string }) {
-  const [items, setItems] = useState<any[]>([]);
+function TransactionsTab({ token }: { token: string }) {
+  const [deposits, setDeposits] = useState<any[]>([]);
+  const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [activeSection, setActiveSection] = useState<'deposits' | 'withdrawals'>('deposits');
 
-  const fetchData = async () => {
-    setLoading(true); setError('');
+  const fetchDeposits = async () => {
+    setError('');
     try {
-      const res = await fetch(`${API_URL}/api/admin/deposits`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await fetch(`${API_URL}/api/admin/deposits`, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error('Falha ao carregar depósitos');
-      setItems(await res.json());
-    } catch (err:any) { setError(err.message); }
-    finally { setLoading(false); }
+      setDeposits(await res.json());
+    } catch (err: any) { setError(err?.message || 'Erro'); }
   };
-  useEffect(() => { fetchData(); }, []);
 
-  return (
-    <TabTable
-      title="Depósitos"
-      loading={loading}
-      error={error}
-      onRefresh={fetchData}
-      columns={['ID','User','Valor','Status','Criado em']}
-      rows={items.map(d => [d.id, d.user_id, `R$ ${d.amount?.toFixed(2)}`, d.status, d.created_at])}
-    />
-  );
-}
-
-function WithdrawalsTab({ token }: { token: string }) {
-  const [items, setItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const fetchData = async () => {
-    setLoading(true); setError('');
+  const fetchWithdrawals = async () => {
+    setError('');
     try {
-      const res = await fetch(`${API_URL}/api/admin/withdrawals`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await fetch(`${API_URL}/api/admin/withdrawals`, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error('Falha ao carregar saques');
-      setItems(await res.json());
-    } catch (err:any) { setError(err.message); }
-    finally { setLoading(false); }
+      setWithdrawals(await res.json());
+    } catch (err: any) { setError(err?.message || 'Erro'); }
   };
-  useEffect(() => { fetchData(); }, []);
-  return (
-    <TabTable
-      title="Saques"
-      loading={loading}
-      error={error}
-      onRefresh={fetchData}
-      columns={['ID','User','Valor','Status','Criado em']}
-      rows={items.map(d => [d.id, d.user_id, `R$ ${d.amount?.toFixed(2)}`, d.status, d.created_at])}
-    />
-  );
-}
 
-function FTDsTab({ token }: { token: string }) {
-  const [items, setItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const fetchData = async () => {
+  const fetchAll = async () => {
     setLoading(true); setError('');
     try {
-      const res = await fetch(`${API_URL}/api/admin/ftds`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('Falha ao carregar FTDs');
-      setItems(await res.json());
-    } catch (err:any) { setError(err.message); }
-    finally { setLoading(false); }
+      await Promise.all([fetchDeposits(), fetchWithdrawals()]);
+    } finally { setLoading(false); }
   };
-  useEffect(() => { fetchData(); }, []);
+
+  useEffect(() => { fetchAll(); }, []);
+
   return (
-    <TabTable
-      title="FTDs"
-      loading={loading}
-      error={error}
-      onRefresh={fetchData}
-      columns={['ID','User','Depósito','Valor','Taxa','Status']}
-      rows={items.map(d => [d.id, d.user_id, d.deposit_id, `R$ ${d.amount?.toFixed(2)}`, `${d.pass_rate}%`, d.status])}
-    />
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold">Depósitos e Saques</h2>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setActiveSection('deposits')}
+            className={`px-4 py-2 rounded font-semibold flex items-center gap-2 ${activeSection === 'deposits' ? 'bg-[#0a4d3e] text-white' : 'bg-gray-700 hover:bg-gray-600'}`}
+          >
+            <ArrowDownCircle size={18} /> Depósitos
+          </button>
+          <button
+            onClick={() => setActiveSection('withdrawals')}
+            className={`px-4 py-2 rounded font-semibold flex items-center gap-2 ${activeSection === 'withdrawals' ? 'bg-[#0a4d3e] text-white' : 'bg-gray-700 hover:bg-gray-600'}`}
+          >
+            <ArrowUpCircle size={18} /> Saques
+          </button>
+          <button onClick={fetchAll} className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded">
+            <RefreshCw size={18} /> Atualizar
+          </button>
+        </div>
+      </div>
+      {error && <div className="text-red-400">{error}</div>}
+      {loading && !deposits.length && !withdrawals.length ? (
+        <div>Carregando...</div>
+      ) : activeSection === 'deposits' ? (
+        <TabTable
+          title="Depósitos"
+          loading={false}
+          error=""
+          onRefresh={fetchDeposits}
+          columns={['ID', 'Usuário', 'Valor', 'Status', 'Criado em']}
+          rows={deposits.map(d => [
+            d.id,
+            d.username || `#${d.user_id}`,
+            `R$ ${(d.amount ?? 0).toFixed(2).replace('.', ',')}`,
+            d.status || '-',
+            d.created_at ? new Date(d.created_at).toLocaleString('pt-BR') : '-'
+          ])}
+        />
+      ) : (
+        <TabTable
+          title="Saques"
+          loading={false}
+          error=""
+          onRefresh={fetchWithdrawals}
+          columns={['ID', 'Usuário', 'Valor', 'Status', 'Criado em']}
+          rows={withdrawals.map(d => [
+            d.id,
+            d.username || `#${d.user_id}`,
+            `R$ ${(d.amount ?? 0).toFixed(2).replace('.', ',')}`,
+            d.status || '-',
+            d.created_at ? new Date(d.created_at).toLocaleString('pt-BR') : '-'
+          ])}
+        />
+      )}
+    </div>
   );
 }
 
@@ -2449,6 +2443,7 @@ function AffiliatesTab({ token }: { token: string }) {
 
 // ========== THEMES TAB (Updated to use API) ==========
 function ThemesTab({ token }: { token: string }) {
+  const { refreshTheme } = useTheme();
   const [themes, setThemes] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -2465,13 +2460,31 @@ function ThemesTab({ token }: { token: string }) {
     textSecondary: '#9ca3af',
     success: '#10b981',
     error: '#ef4444',
-    warning: '#f59e0b'
+    warning: '#f59e0b',
+    is_active: false
   });
 
   useEffect(() => {
     fetchThemes();
     loadActiveTheme();
   }, []);
+
+  // Aplicar cores em tempo real enquanto edita/cria
+  useEffect(() => {
+    if (showNewForm || editingId) {
+      applyThemeToPage(JSON.stringify({
+        primary: form.primary,
+        secondary: form.secondary,
+        accent: form.accent,
+        background: form.background,
+        text: form.text,
+        textSecondary: form.textSecondary,
+        success: form.success,
+        error: form.error,
+        warning: form.warning
+      }));
+    }
+  }, [form.primary, form.secondary, form.accent, form.background, form.text, form.textSecondary, form.success, form.error, form.warning, showNewForm, editingId]);
 
   const loadActiveTheme = async () => {
     try {
@@ -2564,7 +2577,7 @@ function ThemesTab({ token }: { token: string }) {
           body: JSON.stringify({
             name: form.name,
             colors_json: colorsJson,
-            is_active: false
+            is_active: form.is_active ?? false
           })
         });
       }
@@ -2577,6 +2590,7 @@ function ThemesTab({ token }: { token: string }) {
       setSuccess(editingId ? 'Tema atualizado!' : 'Tema criado!');
       resetForm();
       fetchThemes();
+      refreshTheme(); // Atualizar tema na plataforma
     } catch (err: any) {
       setError(err.message);
     }
@@ -2593,10 +2607,12 @@ function ThemesTab({ token }: { token: string }) {
       textSecondary: '#9ca3af',
       success: '#10b981',
       error: '#ef4444',
-      warning: '#f59e0b'
+      warning: '#f59e0b',
+      is_active: false
     });
     setEditingId(null);
     setShowNewForm(false);
+    loadActiveTheme(); // Restaurar tema ativo ao cancelar
   };
 
   const loadForEdit = (theme: any) => {
@@ -2613,7 +2629,8 @@ function ThemesTab({ token }: { token: string }) {
         textSecondary: colors.textSecondary || '#9ca3af',
         success: colors.success || '#10b981',
         error: colors.error || '#ef4444',
-        warning: colors.warning || '#f59e0b'
+        warning: colors.warning || '#f59e0b',
+        is_active: theme.is_active ?? false
       });
       setShowNewForm(false);
     } catch (err) {
@@ -2655,7 +2672,7 @@ function ThemesTab({ token }: { token: string }) {
       if (theme) {
         applyThemeToPage(theme.colors_json);
       }
-      setTimeout(() => window.location.reload(), 1000);
+      refreshTheme(); // Atualizar tema na plataforma
     } catch (err: any) {
       setError(err.message);
     }
@@ -2783,6 +2800,24 @@ function ThemesTab({ token }: { token: string }) {
                 placeholder="Ex: Tema Escuro"
               />
             </div>
+
+            {!editingId && (
+              <div className="flex items-center gap-2 p-3 bg-gray-700/50 rounded border border-gray-600">
+                <input
+                  type="checkbox"
+                  id="theme_is_active"
+                  checked={form.is_active ?? false}
+                  onChange={e => setForm({...form, is_active: e.target.checked})}
+                  className="rounded"
+                />
+                <label htmlFor="theme_is_active" className="text-sm cursor-pointer">
+                  Usar como tema principal na plataforma (substitui o tema atual)
+                </label>
+              </div>
+            )}
+            {editingId && (
+              <p className="text-sm text-gray-400">Use o botão &quot;Ativar&quot; no card do tema para torná-lo o principal.</p>
+            )}
             
             <div className="grid md:grid-cols-2 gap-4">
               <ColorInput
@@ -3013,13 +3048,13 @@ function BetsTab({ token }: { token: string }) {
       columns={['ID', 'Usuário', 'Jogo', 'Provedor', 'Valor', 'Ganho', 'Status', 'Data']}
       rows={bets.map(b => [
         b.id,
-        b.username || `User ${b.user_id}`,
+        b.username || `#${b.user_id}`,
         b.game_name || b.game_id || '-',
         b.provider || '-',
-        `R$ ${b.amount?.toFixed(2)}`,
-        `R$ ${b.win_amount?.toFixed(2)}`,
-        b.status,
-        new Date(b.created_at).toLocaleString('pt-BR')
+        `R$ ${(b.amount ?? 0).toFixed(2).replace('.', ',')}`,
+        `R$ ${(b.win_amount ?? 0).toFixed(2).replace('.', ',')}`,
+        b.status || '-',
+        b.created_at ? new Date(b.created_at).toLocaleString('pt-BR') : '-'
       ])}
     />
   );

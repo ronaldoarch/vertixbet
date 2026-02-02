@@ -157,6 +157,7 @@ class DepositResponse(DepositBase):
     external_id: Optional[str]
     created_at: datetime
     updated_at: datetime
+    username: Optional[str] = None  # Preenchido na listagem
     
     class Config:
         from_attributes = True
@@ -195,6 +196,7 @@ class WithdrawalResponse(WithdrawalBase):
     external_id: Optional[str]
     created_at: datetime
     updated_at: datetime
+    username: Optional[str] = None  # Preenchido na listagem
     
     class Config:
         from_attributes = True

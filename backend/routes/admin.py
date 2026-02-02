@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from sqlalchemy import desc
 from typing import List, Optional
@@ -138,12 +138,14 @@ async def get_deposits(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_admin_user)
 ):
-    query = db.query(Deposit)
+    query = db.query(Deposit).options(joinedload(Deposit.user))
     if status_filter:
         query = query.filter(Deposit.status == status_filter)
     if user_id:
         query = query.filter(Deposit.user_id == user_id)
     deposits = query.order_by(desc(Deposit.created_at)).offset(skip).limit(limit).all()
+    for d in deposits:
+        setattr(d, 'username', d.user.username if d.user else None)
     return deposits
 
 
@@ -153,9 +155,10 @@ async def get_deposit(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_admin_user)
 ):
-    deposit = db.query(Deposit).filter(Deposit.id == deposit_id).first()
+    deposit = db.query(Deposit).options(joinedload(Deposit.user)).filter(Deposit.id == deposit_id).first()
     if not deposit:
         raise HTTPException(status_code=404, detail="Deposit not found")
+    setattr(deposit, 'username', deposit.user.username if deposit.user else None)
     return deposit
 
 
@@ -236,12 +239,14 @@ async def get_withdrawals(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_admin_user)
 ):
-    query = db.query(Withdrawal)
+    query = db.query(Withdrawal).options(joinedload(Withdrawal.user))
     if status_filter:
         query = query.filter(Withdrawal.status == status_filter)
     if user_id:
         query = query.filter(Withdrawal.user_id == user_id)
     withdrawals = query.order_by(desc(Withdrawal.created_at)).offset(skip).limit(limit).all()
+    for w in withdrawals:
+        setattr(w, 'username', w.user.username if w.user else None)
     return withdrawals
 
 
@@ -251,9 +256,10 @@ async def get_withdrawal(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_admin_user)
 ):
-    withdrawal = db.query(Withdrawal).filter(Withdrawal.id == withdrawal_id).first()
+    withdrawal = db.query(Withdrawal).options(joinedload(Withdrawal.user)).filter(Withdrawal.id == withdrawal_id).first()
     if not withdrawal:
         raise HTTPException(status_code=404, detail="Withdrawal not found")
+    setattr(withdrawal, 'username', withdrawal.user.username if withdrawal.user else None)
     return withdrawal
 
 
@@ -1325,7 +1331,7 @@ async def get_bets(
     current_user: User = Depends(get_current_admin_user)
 ):
     """Listar apostas"""
-    query = db.query(Bet)
+    query = db.query(Bet).options(joinedload(Bet.user))
     
     if user_id:
         query = query.filter(Bet.user_id == user_id)
