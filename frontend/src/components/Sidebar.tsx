@@ -1,4 +1,5 @@
 import { X, Search, ChevronDown } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -8,14 +9,16 @@ interface SidebarProps {
   providers?: string[];
 }
 
+// Mapeamento nome exibido -> game_code da IGameWin (PGSoft usa _, Pragmatic pode usar -)
+const POPULAR_GAMES: { title: string; code: string }[] = [
+  { title: 'Fortune Tiger', code: 'fortune_tiger' },
+  { title: 'Fortune Mouse', code: 'fortune_mouse' },
+  { title: 'Fortune Ox', code: 'fortune_ox' },
+  { title: 'Gate of Olympus', code: 'gate_of_olympus' },
+  { title: 'Aviator', code: 'aviator' },
+];
+
 export default function Sidebar({ isOpen, onClose, filters, onFiltersChange, providers = [] }: SidebarProps) {
-  const popularGames = [
-    'Fortune Tiger',
-    'Fortune Mouse',
-    'Fortune Ox',
-    'Gate of Olympus',
-    'Aviator',
-  ];
 
   return (
     <>
@@ -123,14 +126,15 @@ export default function Sidebar({ isOpen, onClose, filters, onFiltersChange, pro
             </div>
             <div className="px-4 pb-3">
               <ul className="space-y-1">
-                {popularGames.map((game) => (
-                  <li key={game}>
-                    <a
-                      href={`/jogo/${game.toLowerCase().replace(/\s+/g, '-')}`}
+                {POPULAR_GAMES.map(({ title, code }) => (
+                  <li key={code}>
+                    <Link
+                      to={`/jogo/${code}`}
+                      onClick={onClose}
                       className="block px-1 py-2 rounded-md text-xs hover:bg-[#0d5d4b] transition-all duration-200 text-gray-100 hover:text-white"
                     >
-                      {game}
-                    </a>
+                      {title}
+                    </Link>
                   </li>
                 ))}
               </ul>

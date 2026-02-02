@@ -971,6 +971,9 @@ async def launch_game(
             detail="Nenhum agente IGameWin ativo configurado ou credenciais incompletas (agent_code/agent_key vazios)"
         )
     
+    # Código do jogo a enviar para a API (pode ser normalizado na busca)
+    code_to_launch = game_code
+
     # Se provider_code não foi fornecido, buscar na lista de jogos
     if not provider_code:
         providers = await api.get_providers()
@@ -981,18 +984,29 @@ async def launch_game(
             )
         
         # Tentar encontrar o jogo em cada provider
+        # Normalizar: IGameWin pode usar _ ou - (fortune_tiger vs fortune-tiger)
+        def _normalize(s: str) -> str:
+            if not s:
+                return ""
+            return str(s).lower().replace("-", "_").strip()
+
         found_provider = None
+        game_code_norm = _normalize(game_code)
+
         for provider in providers:
             provider_code_to_try = provider.get("code") or provider.get("provider_code")
             if not provider_code_to_try:
                 continue
-            
+
             games = await api.get_games(provider_code=provider_code_to_try)
             if games:
                 for game in games:
-                    game_code_from_api = game.get("game_code") or game.get("code") or game.get("game_id") or game.get("id")
-                    if game_code_from_api == game_code:
+                    api_code = game.get("game_code") or game.get("code") or game.get("game_id") or game.get("id")
+                    if not api_code:
+                        continue
+                    if api_code == game_code or _normalize(api_code) == game_code_norm:
                         found_provider = provider_code_to_try
+                        code_to_launch = api_code  # Usar código exato da API
                         break
                 if found_provider:
                     break
@@ -1059,7 +1073,7 @@ async def launch_game(
     # Gerar URL de lançamento do jogo usando user_code (username)
     launch_url = await api.launch_game(
         user_code=current_user.username,
-        game_code=game_code,
+        game_code=code_to_launch,
         provider_code=provider_code,
         lang=lang
     )
