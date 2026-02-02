@@ -51,6 +51,16 @@ def init_db():
             conn.commit()
     except Exception:
         pass
+    # Migração: display_name em users
+    try:
+        with engine.connect() as conn:
+            if "sqlite" in DATABASE_URL:
+                conn.execute(text("ALTER TABLE users ADD COLUMN display_name VARCHAR(200)"))
+            else:
+                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name VARCHAR(200)"))
+            conn.commit()
+    except Exception:
+        pass
 
 
 def get_db():

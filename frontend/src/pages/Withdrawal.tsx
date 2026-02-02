@@ -11,8 +11,7 @@ export default function Withdrawal() {
   const [amount, setAmount] = useState('');
   const [minWithdrawal, setMinWithdrawal] = useState(10);
   const [pixKey, setPixKey] = useState('');
-  const [pixKeyType, setPixKeyType] = useState('phoneNumber');
-  const [documentValidation, setDocumentValidation] = useState('');
+  const [pixKeyType, setPixKeyType] = useState<'document' | 'email' | 'phoneNumber' | 'randomKey'>('document');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -72,9 +71,11 @@ export default function Withdrawal() {
         },
         body: JSON.stringify({
           amount: value,
-          pix_key: pixKey.trim(),
+          pix_key: (pixKeyType === 'document' || pixKeyType === 'phoneNumber')
+            ? pixKey.trim().replace(/\D/g, '')
+            : pixKey.trim(),
           pix_key_type: pixKeyType,
-          document_validation: documentValidation || undefined
+          document_validation: undefined
         })
       });
 
@@ -117,7 +118,7 @@ export default function Withdrawal() {
             <div className="bg-gradient-to-br from-[#0a4d3e] to-[#0d5d4b] rounded-2xl p-6 border border-[#d4af37]/20">
               <h2 className="text-xl font-bold mb-4">Saque via PIX</h2>
               <p className="text-gray-300 text-sm mb-4">
-                Digite o valor e a chave PIX de destino. O saque será processado automaticamente.
+                Digite o valor e a sua chave PIX de destino. Você pode usar CPF, CNPJ, e-mail, celular ou chave aleatória. O saque será processado automaticamente.
               </p>
               <div className="space-y-2 text-sm">
                 <p className="text-yellow-400">⚠️ Valor mínimo: R$ {minWithdrawal.toFixed(2).replace('.', ',')}</p>
@@ -148,55 +149,48 @@ export default function Withdrawal() {
 
               <div>
                 <label className="block text-sm text-gray-400 mb-2">
-                  Tipo de Chave PIX
+                  Tipo da sua Chave PIX
                 </label>
                 <select
                   value={pixKeyType}
-                  onChange={(e) => setPixKeyType(e.target.value)}
+                  onChange={(e) => {
+                    setPixKeyType(e.target.value as typeof pixKeyType);
+                    setPixKey('');
+                  }}
                   className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 focus:border-[#d4af37] focus:outline-none"
                   disabled={loading}
                 >
-                  <option value="phoneNumber">Telefone (DDD + Número)</option>
+                  <option value="document">CPF ou CNPJ</option>
                   <option value="email">E-mail</option>
-                  <option value="document">CPF/CNPJ</option>
+                  <option value="phoneNumber">Celular</option>
                   <option value="randomKey">Chave Aleatória</option>
                 </select>
               </div>
 
               <div>
                 <label className="block text-sm text-gray-400 mb-2">
-                  Chave PIX de Destino
+                  {pixKeyType === 'document' && 'Digite seu CPF ou CNPJ'}
+                  {pixKeyType === 'email' && 'Digite seu E-mail'}
+                  {pixKeyType === 'phoneNumber' && 'Digite seu Celular (DDD + Número)'}
+                  {pixKeyType === 'randomKey' && 'Digite sua Chave Aleatória'}
                 </label>
                 <input
-                  type="text"
+                  type={pixKeyType === 'email' ? 'email' : 'text'}
+                  inputMode={pixKeyType === 'phoneNumber' ? 'numeric' : undefined}
                   value={pixKey}
                   onChange={(e) => setPixKey(e.target.value)}
                   placeholder={
-                    pixKeyType === 'phoneNumber' ? '62999999999' :
-                    pixKeyType === 'email' ? 'seu@email.com' :
                     pixKeyType === 'document' ? '000.000.000-00' :
-                    'Chave aleatória'
+                    pixKeyType === 'email' ? 'seu@email.com' :
+                    pixKeyType === 'phoneNumber' ? '11999999999' :
+                    'Sua chave aleatória PIX'
                   }
                   className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 focus:border-[#d4af37] focus:outline-none"
                   required
                   disabled={loading}
                 />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-400 mb-2">
-                  Validar CPF/CNPJ (Opcional)
-                </label>
-                <input
-                  type="text"
-                  value={documentValidation}
-                  onChange={(e) => setDocumentValidation(e.target.value)}
-                  placeholder="000.000.000-00"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 focus:border-[#d4af37] focus:outline-none"
-                  disabled={loading}
-                />
                 <p className="text-xs text-gray-500 mt-1">
-                  Valida se o CPF/CNPJ pertence à chave PIX informada
+                  O valor será enviado para esta chave PIX
                 </p>
               </div>
 

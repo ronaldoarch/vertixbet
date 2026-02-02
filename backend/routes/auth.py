@@ -52,24 +52,28 @@ def check_rate_limit(username: str) -> bool:
         return True
 
 
+def _sanitize_phone(phone: str) -> str:
+    """Remove caracteres não numéricos do telefone."""
+    return "".join(c for c in str(phone) if c.isdigit()) if phone else ""
+
+
 @router.post("/register", response_model=UserResponse)
 async def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    # Verificar se username já existe
-    if get_user_by_username(db, user_data.username):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already registered"
-        )
-    
-    # Verificar se email já existe
-    existing_user = db.query(User).filter(User.email == user_data.email).first()
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
-        )
-    
-    # Afiliado: vincular ao afiliado se veio com ref (?ref=CODIGO)
+    # Username = telefone (sanitizado) para login
+    username = _sanitize_phone(user_data.username) or user_data.username.strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="Telefone é obrigatório")
+
+    if get_user_by_username(db, username):
+        raise HTTPException(status_code=400, detail="Este telefone já está cadastrado")
+
+    # Gerar email único se não informado
+    email = user_data.email
+    if not email or not str(email).strip():
+        import time
+        base = username.replace("+", "")[:15]
+        email = f"user_{base}_{int(time.time())}@placeholder.local"
+
     referred_by_affiliate_id = None
     if getattr(user_data, "affiliate_code", None) and str(user_data.affiliate_code).strip():
         aff = db.query(Affiliate).filter(Affiliate.affiliate_code == str(user_data.affiliate_code).strip().upper()).first()
@@ -78,10 +82,11 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
             aff.total_referrals = (aff.total_referrals or 0) + 1
 
     new_user = User(
-        username=user_data.username,
-        email=user_data.email,
+        username=username,
+        email=email,
         cpf=user_data.cpf,
-        phone=user_data.phone,
+        phone=user_data.phone or username,
+        display_name=user_data.display_name,
         password_hash=get_password_hash(user_data.password),
         role=UserRole.USER,
         balance=0.0,

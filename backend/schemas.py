@@ -7,14 +7,21 @@ from models import TransactionStatus, UserRole, MediaType
 # User Schemas
 class UserBase(BaseModel):
     username: str
-    email: EmailStr
+    email: Optional[EmailStr] = None
     cpf: Optional[str] = None
     phone: Optional[str] = None
+    display_name: Optional[str] = None
 
 
-class UserCreate(UserBase):
+class UserCreate(BaseModel):
+    """Cadastro: username (telefone), password, display_name (nome). Email/CPF opcionais - backend gera email."""
+    username: str  # telefone para login
     password: str
-    affiliate_code: Optional[str] = None  # ref= no link de afiliado (?ref=CODIGO)
+    display_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    cpf: Optional[str] = None
+    phone: Optional[str] = None
+    affiliate_code: Optional[str] = None
 
 
 class UserUpdate(BaseModel):
@@ -33,6 +40,7 @@ class UserResponse(UserBase):
     balance: float
     is_active: bool
     is_verified: bool
+    display_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     
@@ -124,11 +132,11 @@ class DepositCreate(DepositBase):
 
 
 class DepositPixRequest(BaseModel):
-    """Request body para criar depósito PIX"""
+    """Request body para criar depósito PIX. payer_* opcionais - usa dados de SiteSettings se vazios."""
     amount: float
-    payer_name: str
-    payer_tax_id: str
-    payer_email: str
+    payer_name: Optional[str] = None
+    payer_tax_id: Optional[str] = None
+    payer_email: Optional[str] = None
     payer_phone: Optional[str] = None
     coupon_code: Optional[str] = None
 

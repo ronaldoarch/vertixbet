@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Wallet, User, Mail, Phone, CreditCard, LogOut, ArrowLeft, UserCog } from 'lucide-react';
+import { Wallet, User, Phone, LogOut, ArrowLeft, UserCog } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -109,31 +109,22 @@ export default function Profile() {
             Informações Pessoais
           </h2>
           <div className="space-y-4">
+            {(user.display_name || user.username) && (
+              <div className="flex items-center gap-3">
+                <User size={18} className="text-gray-400" />
+                <div>
+                  <p className="text-gray-400 text-sm">Nome</p>
+                  <p className="text-white">{user.display_name || user.username}</p>
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-3">
-              <Mail size={18} className="text-gray-400" />
+              <Phone size={18} className="text-gray-400" />
               <div>
-                <p className="text-gray-400 text-sm">Email</p>
-                <p className="text-white">{user.email}</p>
+                <p className="text-gray-400 text-sm">Telefone</p>
+                <p className="text-white">{user.phone || user.username}</p>
               </div>
             </div>
-            {user.cpf && (
-              <div className="flex items-center gap-3">
-                <CreditCard size={18} className="text-gray-400" />
-                <div>
-                  <p className="text-gray-400 text-sm">CPF</p>
-                  <p className="text-white">{user.cpf}</p>
-                </div>
-              </div>
-            )}
-            {user.phone && (
-              <div className="flex items-center gap-3">
-                <Phone size={18} className="text-gray-400" />
-                <div>
-                  <p className="text-gray-400 text-sm">Telefone</p>
-                  <p className="text-white">{user.phone}</p>
-                </div>
-              </div>
-            )}
             <div className="flex items-center gap-3">
               <div>
                 <p className="text-gray-400 text-sm">Status da Conta</p>

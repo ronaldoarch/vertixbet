@@ -1508,14 +1508,19 @@ function IGameWinTab({ token }: { token: string }) {
   );
 }
 
+const PIX_KEYS = ['pix_default_name', 'pix_default_tax_id', 'pix_default_email', 'pix_default_phone'] as const;
+
 function SettingsTab({ token }: { token: string }) {
   const [form, setForm] = useState({ pass_rate: 0, min_amount: 2, min_withdrawal: 10, is_active: true });
   const [supportPhone, setSupportPhone] = useState('');
+  const [pixDefaults, setPixDefaults] = useState({ pix_default_name: '', pix_default_tax_id: '', pix_default_email: '', pix_default_phone: '' });
   const [loading, setLoading] = useState(false);
   const [loadingSupport, setLoadingSupport] = useState(false);
+  const [loadingPix, setLoadingPix] = useState(false);
   const [error, setError] = useState('');
   const [supportError, setSupportError] = useState('');
   const [supportSuccess, setSupportSuccess] = useState('');
+  const [pixError, setPixError] = useState('');
 
   const load = async () => {
     setLoading(true); setError('');
@@ -1607,9 +1612,58 @@ function SettingsTab({ token }: { token: string }) {
     }
   };
 
+  const loadPixDefaults = async () => {
+    setLoadingPix(true); setPixError('');
+    try {
+      const vals: Record<string, string> = {};
+      for (const k of PIX_KEYS) {
+        const res = await fetch(`${API_URL}/api/admin/site-settings/${k}`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) {
+          const d = await res.json();
+          vals[k] = d.value || '';
+        } else {
+          vals[k] = '';
+        }
+      }
+      setPixDefaults(vals as typeof pixDefaults);
+    } catch (e: any) {
+      setPixError(e.message);
+    } finally {
+      setLoadingPix(false);
+    }
+  };
+
+  const savePixDefaults = async () => {
+    setLoadingPix(true); setPixError('');
+    try {
+      for (const k of PIX_KEYS) {
+        const v = pixDefaults[k as keyof typeof pixDefaults] || '';
+        let res = await fetch(`${API_URL}/api/admin/site-settings/${k}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ value: v, description: `Dados PIX padrão: ${k}` })
+        });
+        if (res.status === 404) {
+          res = await fetch(`${API_URL}/api/admin/site-settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ key: k, value: v, description: `Dados PIX padrão: ${k}` })
+          });
+        }
+        if (!res.ok) throw new Error('Falha ao salvar');
+      }
+      await loadPixDefaults();
+    } catch (e: any) {
+      setPixError(e.message);
+    } finally {
+      setLoadingPix(false);
+    }
+  };
+
   useEffect(() => { 
     load(); 
     loadSupportPhone();
+    loadPixDefaults();
   }, []);
 
   return (
@@ -1634,6 +1688,33 @@ function SettingsTab({ token }: { token: string }) {
             <span>Ativo</span>
           </div>
           <button onClick={save} className="md:col-span-2 bg-[#ff6b35] hover:bg-[#ff7b35] text-white py-2 rounded font-semibold">Salvar</button>
+        </div>
+      </div>
+
+      {/* Dados PIX padrão (depósito/saque - mesmo para todos os usuários) */}
+      <div className="space-y-4">
+        <h2 className="text-2xl font-bold">Dados PIX padrão</h2>
+        <p className="text-sm text-gray-400">Usados para gerar depósitos e saques. Configure uma vez e será usado para todos os usuários.</p>
+        {pixError && <div className="text-red-400">{pixError}</div>}
+        {loadingPix && <div className="text-sm text-gray-400">Carregando...</div>}
+        <div className="grid md:grid-cols-2 gap-3 bg-gray-800/60 p-4 rounded border border-gray-700">
+          <div>
+            <label className="text-sm text-gray-300">Nome</label>
+            <input type="text" className="w-full bg-gray-700 rounded px-3 py-2" placeholder="Nome do titular" value={pixDefaults.pix_default_name} onChange={e=>setPixDefaults({...pixDefaults, pix_default_name:e.target.value})}/>
+          </div>
+          <div>
+            <label className="text-sm text-gray-300">CPF/CNPJ</label>
+            <input type="text" className="w-full bg-gray-700 rounded px-3 py-2" placeholder="000.000.000-00" value={pixDefaults.pix_default_tax_id} onChange={e=>setPixDefaults({...pixDefaults, pix_default_tax_id:e.target.value})}/>
+          </div>
+          <div>
+            <label className="text-sm text-gray-300">E-mail</label>
+            <input type="email" className="w-full bg-gray-700 rounded px-3 py-2" placeholder="email@exemplo.com" value={pixDefaults.pix_default_email} onChange={e=>setPixDefaults({...pixDefaults, pix_default_email:e.target.value})}/>
+          </div>
+          <div>
+            <label className="text-sm text-gray-300">Telefone</label>
+            <input type="text" className="w-full bg-gray-700 rounded px-3 py-2" placeholder="5511999999999" value={pixDefaults.pix_default_phone} onChange={e=>setPixDefaults({...pixDefaults, pix_default_phone:e.target.value})}/>
+          </div>
+          <button onClick={savePixDefaults} disabled={loadingPix} className="md:col-span-2 bg-[#ff6b35] hover:bg-[#ff7b35] disabled:opacity-50 text-white py-2 rounded font-semibold">Salvar dados PIX</button>
         </div>
       </div>
 

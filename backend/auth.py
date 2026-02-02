@@ -33,9 +33,11 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 
 
 def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
-    # Tenta encontrar por username primeiro
+    # Normalizar: remover não-numéricos para buscar por telefone
+    sanitized = "".join(c for c in str(username) if c.isdigit()) if username else ""
     user = db.query(User).filter(User.username == username).first()
-    # Se não encontrou, tenta por email
+    if not user and sanitized:
+        user = db.query(User).filter(User.username == sanitized).first()
     if not user:
         user = db.query(User).filter(User.email == username).first()
     if not user:

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from database import get_db
 from sqlalchemy import func
-from models import User, Deposit, Withdrawal, Gateway, TransactionStatus, Bet, BetStatus, Affiliate, FTDSettings, FTD, Coupon, CouponType
+from models import User, Deposit, Withdrawal, Gateway, TransactionStatus, Bet, BetStatus, Affiliate, FTDSettings, FTD, Coupon, CouponType, SiteSettings
 from suitpay_api import SuitPayAPI
 from schemas import DepositResponse, WithdrawalResponse, DepositPixRequest, WithdrawalPixRequest, AffiliateResponse
 from dependencies import get_current_user
@@ -145,11 +145,25 @@ async def create_pix_deposit(
             detail=f"Valor mínimo de depósito é R$ {min_deposit:.2f}".replace(".", ","),
         )
     
-    # Validar CPF/CNPJ (não pode estar vazio conforme SuitPay)
-    if not request.payer_tax_id or not request.payer_tax_id.strip():
+    # Dados do pagador: usar request ou SiteSettings (dados fixos para todos)
+    def _get_setting(db_session, key: str, default: str = "") -> str:
+        s = db_session.query(SiteSettings).filter(SiteSettings.key == key).first()
+        return (s.value or "").strip() if s and s.value else default
+
+    payer_name = (request.payer_name or "").strip() or _get_setting(db, "pix_default_name", "Cliente")
+    payer_tax_id = (request.payer_tax_id or "").strip() or _get_setting(db, "pix_default_tax_id")
+    payer_email = (request.payer_email or "").strip() or _get_setting(db, "pix_default_email")
+    payer_phone = (request.payer_phone or "").strip() or _get_setting(db, "pix_default_phone", "")
+
+    if not payer_tax_id:
         raise HTTPException(
-            status_code=400, 
-            detail="CPF/CNPJ é obrigatório para gerar código PIX. Por favor, complete seu cadastro."
+            status_code=400,
+            detail="CPF/CNPJ é obrigatório. Configure em Admin > Configurações > Dados PIX padrão."
+        )
+    if not payer_email:
+        raise HTTPException(
+            status_code=400,
+            detail="E-mail é obrigatório. Configure em Admin > Configurações > Dados PIX padrão."
         )
     
     # Buscar gateway PIX ativo
@@ -177,10 +191,10 @@ async def create_pix_deposit(
         request_number=request_number,
         due_date=due_date,
         amount=request.amount,
-        client_name=request.payer_name,
-        client_document=request.payer_tax_id,
-        client_email=request.payer_email,
-        client_phone=request.payer_phone,
+        client_name=payer_name,
+        client_document=payer_tax_id,
+        client_email=payer_email,
+        client_phone=payer_phone or None,
         callback_url=callback_url
     )
     
@@ -284,16 +298,22 @@ async def create_pix_withdrawal(
     webhook_url = os.getenv("WEBHOOK_BASE_URL", "https://api.vertixbet.site")
     callback_url = f"{webhook_url}/api/webhooks/suitpay/pix-cashout"
     
-    # Gerar external_id único para controle de duplicidade
     external_id = f"WTH_{user.id}_{int(datetime.utcnow().timestamp())}"
-    
-    # Realizar transferência PIX conforme documentação oficial
+    # document_validation: quando a chave é CPF/CNPJ, usar a própria chave; senão usar SiteSettings
+    doc_validation = (request.document_validation or "").strip()
+    if not doc_validation:
+        if request.pix_key_type == "document":
+            doc_validation = "".join(c for c in request.pix_key if c.isdigit())
+        if not doc_validation:
+            s = db.query(SiteSettings).filter(SiteSettings.key == "pix_default_tax_id").first()
+            doc_validation = (s.value or "").strip() if s and s.value else ""
+
     transfer_response = await suitpay.transfer_pix(
         key=request.pix_key,
         type_key=request.pix_key_type,
         value=request.amount,
         callback_url=callback_url,
-        document_validation=request.document_validation,
+        document_validation=doc_validation or None,
         external_id=external_id
     )
     

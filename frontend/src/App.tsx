@@ -81,7 +81,11 @@ function App() {
         <div className="flex-1 min-w-0 md:ml-[220px]">
           <main className="pb-20 md:pb-0">
             <HeroBanner />
-            <SearchBar />
+            <SearchBar
+              filters={filters}
+              onFiltersChange={handleFiltersChange}
+              providers={providers}
+            />
             <GameCards />
             <NovidadesSection
               filters={filters}

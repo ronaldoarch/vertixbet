@@ -29,12 +29,11 @@ interface AuthContextType {
 }
 
 interface RegisterData {
-  username: string;
-  email: string;
+  username: string;  // telefone
   password: string;
-  cpf?: string;
+  display_name?: string;
   phone?: string;
-  affiliate_code?: string; // ref do link de afiliado (?ref=CODIGO)
+  affiliate_code?: string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
