@@ -1,10 +1,19 @@
-import { useEffect, useState } from 'react';
-import { Gift, Menu as MenuIcon, Wallet, User } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { Gift, Menu as MenuIcon, Wallet, User, Bell } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 // Backend FastAPI - usa variável de ambiente ou fallback para localhost
 import { API_URL } from '../utils/api';
+
+interface Notification {
+  id: number;
+  title: string;
+  message: string;
+  type: string;
+  link?: string;
+  created_at: string;
+}
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -16,6 +25,34 @@ export default function Header({ onMenuClick, onLoginClick, onRegisterClick }: H
   const navigate = useNavigate();
   const { user } = useAuth();
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/public/notifications?limit=10`);
+        if (res.ok) {
+          const data = await res.json();
+          setNotifications(data);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar notificações:', err);
+      }
+    };
+    fetchNotifications();
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setNotificationsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     const fetchLogo = async () => {
@@ -84,6 +121,65 @@ export default function Header({ onMenuClick, onLoginClick, onRegisterClick }: H
 
           {/* Botões de Ação */}
           <div className="flex items-center gap-2 md:gap-3">
+            {/* Ícone de Notificações */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setNotificationsOpen((o) => !o)}
+                className="p-2 hover:bg-[#0d5d4b] rounded transition-colors relative"
+                aria-label="Notificações"
+              >
+                <Bell size={20} />
+                {notifications.length > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#ff6b35] rounded-full text-[10px] font-bold flex items-center justify-center">
+                    {notifications.length > 9 ? '9+' : notifications.length}
+                  </span>
+                )}
+              </button>
+              {notificationsOpen && (
+                <div className="absolute right-0 top-full mt-1 w-80 max-h-96 overflow-y-auto bg-[#0d1a1a] border border-gray-700 rounded-lg shadow-xl z-50 py-2">
+                  {!user ? (
+                    <div className="px-4 py-6 text-center">
+                      <p className="text-gray-300 text-sm mb-3">
+                        Você precisa estar logado para ver as notificações.
+                      </p>
+                      <button
+                        onClick={() => {
+                          setNotificationsOpen(false);
+                          onLoginClick?.();
+                        }}
+                        className="px-4 py-2 bg-[#ff6b35] hover:bg-[#ff7b35] rounded font-semibold text-sm"
+                      >
+                        Entrar
+                      </button>
+                    </div>
+                  ) : notifications.length === 0 ? (
+                    <p className="px-4 py-6 text-gray-400 text-sm text-center">
+                      Nenhuma notificação
+                    </p>
+                  ) : (
+                    <div className="space-y-1">
+                      {notifications.map((n) => (
+                        <div
+                          key={n.id}
+                          className="px-4 py-3 hover:bg-gray-800/50 border-b border-gray-800/50 last:border-0"
+                        >
+                          <p className="font-semibold text-white text-sm">{n.title}</p>
+                          <p className="text-gray-400 text-xs mt-0.5">{n.message}</p>
+                          {n.link && (
+                            <a
+                              href={n.link}
+                              className="inline-block mt-1 text-xs text-[#d4af37] hover:underline"
+                            >
+                              Saiba mais →
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             {user ? (
               <>
                 {/* Saldo */}
