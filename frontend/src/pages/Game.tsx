@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
 
 // Backend FastAPI - usa variável de ambiente ou fallback para localhost
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { API_URL } from '../utils/api';
 
 // Intervalo de atualização de saldo na página do jogo (evita re-renders que podem afetar a sessão)
 const BALANCE_POLL_INTERVAL_MS = 30000; // 30 segundos

@@ -1,8 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
-
-// Backend FastAPI - usa variável de ambiente ou fallback para localhost
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { API_URL } from '../utils/api';
 
 interface User {
   id: number;

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { RefreshCw, TrendingUp, DollarSign, Activity, ArrowDownCircle, ArrowUpCircle, Percent } from 'lucide-react';
 
 // Backend FastAPI - usa variável de ambiente ou fallback para localhost
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { API_URL } from '../utils/api';
 
 // Componente auxiliar para cards de estatísticas
 function StatCard({ title, value, subtitle, icon }: { title: string; value: string; subtitle?: string; icon: React.ReactNode }) {

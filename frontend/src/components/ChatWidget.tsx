@@ -1,7 +1,7 @@
 import { MessageCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { API_URL } from '../utils/api';
 
 export default function ChatWidget() {
   const [supportPhone, setSupportPhone] = useState<string | null>(null);

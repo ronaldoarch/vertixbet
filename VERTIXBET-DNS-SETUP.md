@@ -144,10 +144,11 @@ O Coolify configurará SSL via Let's Encrypt automaticamente após detectar o DN
 CORS_ORIGINS=https://vertixbet.site,https://www.vertixbet.site,https://api.vertixbet.site
 ```
 
-**Frontend - VITE_API_URL:**
+**Frontend - VITE_API_URL (deixe vazio para usar proxy e evitar CORS):**
 ```env
-VITE_API_URL=https://api.vertixbet.site
+VITE_API_URL=
 ```
+Ou não defina a variável. O nginx do frontend faz proxy de `/api/` para o backend.
 
 ---
 
@@ -155,7 +156,7 @@ VITE_API_URL=https://api.vertixbet.site
 
 - **Frontend:** `https://vertixbet.site`
 - **Backend:** `https://api.vertixbet.site`
-- **API Endpoints:** `https://api.vertixbet.site/api/...`
+- **API (via proxy):** `https://vertixbet.site/api/...` → encaminhado para o backend (mesma origem, sem CORS)
 
 ### 4. Fazer Redeploy
 

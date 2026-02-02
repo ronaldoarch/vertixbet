@@ -11,7 +11,7 @@ interface GameCard {
 }
 
 // Backend FastAPI - usa variável de ambiente ou fallback para localhost
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { API_URL } from '../utils/api';
 
 // Lista de jogos que queremos exibir (com tags e cores)
 const featuredGamesConfig = [

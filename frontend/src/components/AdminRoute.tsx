@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 
 // Backend FastAPI - usa variável de ambiente ou fallback para localhost
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { API_URL } from '../utils/api';
 
 interface AdminRouteProps {
   children: React.ReactNode;

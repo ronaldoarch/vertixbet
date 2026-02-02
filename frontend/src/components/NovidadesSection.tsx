@@ -20,8 +20,9 @@ interface NovidadesSectionProps {
 }
 
 // Backend expõe /api/public/games via FastAPI - usa variável de ambiente ou fallback
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const API_URL = `${API_BASE_URL}/api/public/games`;
+import { API_URL } from '../utils/api';
+
+const GAMES_API_URL = `${API_URL}/api/public/games`;
 
 export default function NovidadesSection({ filters, onProvidersLoaded }: NovidadesSectionProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -50,7 +51,7 @@ export default function NovidadesSection({ filters, onProvidersLoaded }: Novidad
     const fetchGames = async () => {
       setLoading(true);
       try {
-        const res = await fetch(API_URL);
+        const res = await fetch(GAMES_API_URL);
         if (!res.ok) throw new Error('Falha ao carregar jogos');
         const data = await res.json();
         const mapped: Game[] = (data.games || []).map((g: any, idx: number) => ({

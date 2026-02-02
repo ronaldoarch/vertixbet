@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { API_URL } from '../utils/api';
 
 export default function Footer() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);

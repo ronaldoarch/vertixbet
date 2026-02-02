@@ -9,6 +9,7 @@ import {
   Gift, Tag, Gamepad2, UserCog, Palette, BarChart, GripVertical
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
+import { API_URL } from '../utils/api';
 
 interface Stats {
   total_users: number;
@@ -43,9 +44,6 @@ interface Stats {
   depositos_hoje?: number;
   total_lucro?: number;
 }
-
-// Backend FastAPI - usa variável de ambiente ou fallback para localhost
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 // const makeId = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(16).slice(2));
 
