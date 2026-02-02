@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from datetime import datetime
-from models import TransactionStatus, UserRole, MediaType
+from models import TransactionStatus, UserRole, MediaType, NotificationType
 
 
 # User Schemas
@@ -323,6 +323,15 @@ class PromotionResponse(PromotionBase):
     
     class Config:
         from_attributes = True
+
+
+# Notification Schemas
+class NotificationCreate(BaseModel):
+    title: str
+    message: str
+    type: NotificationType = NotificationType.INFO
+    user_id: Optional[int] = None
+    link: Optional[str] = None
 
 
 # Media Asset Schemas

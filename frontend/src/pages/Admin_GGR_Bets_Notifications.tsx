@@ -250,8 +250,11 @@ export function NotificationsTab({ token }: { token: string }) {
         body: JSON.stringify(body)
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || 'Falha ao criar notificação');
+        const err = await res.json().catch(() => ({}));
+        const msg = Array.isArray(err.detail)
+          ? err.detail.map((e: any) => e.msg || e.loc?.join('.')).join(', ')
+          : (err.detail || 'Falha ao criar notificação');
+        throw new Error(typeof msg === 'string' ? msg : 'Falha ao criar notificação');
       }
       await fetchNotifications();
       setShowForm(false);

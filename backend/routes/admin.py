@@ -30,7 +30,8 @@ from schemas import (
     TrackingConfigResponse, TrackingConfigCreate, TrackingConfigUpdate,
     SiteSettingsResponse, SiteSettingsCreate, SiteSettingsUpdate,
     CouponResponse, CouponCreate, CouponUpdate,
-    PromotionResponse, PromotionCreate, PromotionUpdate
+    PromotionResponse, PromotionCreate, PromotionUpdate,
+    NotificationCreate
 )
 from auth import get_password_hash
 from igamewin_api import get_igamewin_api
@@ -1424,21 +1425,17 @@ async def get_notifications(
 
 @router.post("/notifications")
 async def create_notification(
-    title: str,
-    message: str,
-    type: NotificationType = NotificationType.INFO,
-    user_id: Optional[int] = None,
-    link: Optional[str] = None,
+    body: NotificationCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_admin_user)
 ):
-    """Criar notificação"""
+    """Criar notificação (recebe JSON no body)"""
     notification = Notification(
-        title=title,
-        message=message,
-        type=type,
-        user_id=user_id,  # null = notificação global
-        link=link,
+        title=body.title,
+        message=body.message,
+        type=body.type,
+        user_id=body.user_id,  # null = notificação global
+        link=body.link,
         is_active=True,
         is_read=False
     )
