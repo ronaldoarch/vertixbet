@@ -418,9 +418,12 @@ async def create_pix_withdrawal(
     Args:
         request: Dados do saque (amount, pix_key, pix_key_type, document_validation)
     """
+    print(f"[WITHDRAWAL PIX] Iniciando saque - Usuário: {current_user.username}, Valor: R$ {request.amount:.2f}, Chave: {request.pix_key_type}")
     try:
         # Usar usuário autenticado
         user = current_user
+        
+        print(f"[WITHDRAWAL PIX] Saldo atual: R$ {user.balance:.2f}, Bônus: R$ {getattr(user, 'bonus_balance', 0):.2f}")
         
         # Verificar saldo
         if user.balance < request.amount:
@@ -447,14 +450,17 @@ async def create_pix_withdrawal(
         
         # Buscar gateway PIX ativo
         gateway = get_active_pix_gateway(db)
+        print(f"[WITHDRAWAL PIX] Gateway encontrado: {gateway.type} (ID: {gateway.id})")
         
         external_id = f"WTH_{user.id}_{int(datetime.utcnow().timestamp())}"
         webhook_url = os.getenv("WEBHOOK_BASE_URL", "https://api.vertixbet.site")
+        print(f"[WITHDRAWAL PIX] External ID: {external_id}, Webhook URL: {webhook_url}")
         
         pix_response = None
         metadata = {}
         
         if gateway.type == "gatebox":
+            print(f"[WITHDRAWAL PIX] Processando via Gatebox...")
             # Gatebox
             gatebox = get_gatebox_client(gateway)
             if not gatebox:
@@ -515,6 +521,7 @@ async def create_pix_withdrawal(
             }
         else:
             # SuitPay (padrão)
+            print(f"[WITHDRAWAL PIX] Processando via SuitPay...")
             suitpay = get_suitpay_client(gateway)
             callback_url = f"{webhook_url}/api/webhooks/suitpay/pix-cashout"
             
@@ -588,11 +595,13 @@ async def create_pix_withdrawal(
         
         # Bloquear saldo do usuário
         user.balance -= request.amount
+        print(f"[WITHDRAWAL PIX] Saldo bloqueado. Novo saldo: R$ {user.balance:.2f}")
         
         db.add(withdrawal)
         db.commit()
         db.refresh(withdrawal)
         
+        print(f"[WITHDRAWAL PIX] Saque criado com sucesso - ID: {withdrawal.id}, Status: {withdrawal.status}, External ID: {withdrawal.external_id}")
         return withdrawal
     except HTTPException:
         # Re-raise HTTP exceptions (já têm status code apropriado)
