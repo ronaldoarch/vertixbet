@@ -12,6 +12,8 @@ import PoliticaPrivacidade from './pages/PoliticaPrivacidade';
 import PoliticaKYC from './pages/PoliticaKYC';
 import JogoResponsavel from './pages/JogoResponsavel';
 import Promocoes from './pages/Promocoes';
+import History from './pages/History';
+import Bets from './pages/Bets';
 import AdminRoute from './components/AdminRoute';
 import AdminLoginRoute from './components/AdminLoginRoute';
 
@@ -23,6 +25,8 @@ export default function AppRouter() {
         <Route path="/conta" element={<Profile />} />
         <Route path="/depositar" element={<Deposit />} />
         <Route path="/sacar" element={<Withdrawal />} />
+        <Route path="/historico" element={<History />} />
+        <Route path="/apostas" element={<Bets />} />
         <Route path="/jogo/:gameCode" element={<Game />} />
         <Route path="/afiliado" element={<AffiliatePanel />} />
         <Route path="/termos-e-condicoes" element={<TermosCondicoes />} />

@@ -1,11 +1,11 @@
 """
 Rotas públicas para pagamentos (depósitos e saques) usando SuitPay e Gatebox
 """
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 from database import get_db
-from sqlalchemy import func
+from sqlalchemy import func, desc
 from models import User, Deposit, Withdrawal, Gateway, TransactionStatus, Bet, BetStatus, Affiliate, FTDSettings, FTD, Coupon, CouponType, SiteSettings, Promotion, IGameWinAgent, Notification, NotificationType
 from suitpay_api import SuitPayAPI
 from gatebox_api import GateboxAPI, get_gatebox_client
@@ -1783,3 +1783,84 @@ async def get_affiliate_meus_dados(
         "withdrawals_count": withdrawals_count,
         "withdrawals_total": round(total_withdrawals_period, 2),
     }
+
+
+# ========== USER TRANSACTIONS & BETS ==========
+@router.get("/my-transactions")
+async def get_my_transactions(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Retorna depósitos e saques do usuário autenticado"""
+    deposits = db.query(Deposit).filter(
+        Deposit.user_id == current_user.id
+    ).order_by(desc(Deposit.created_at)).offset(skip).limit(limit).all()
+    
+    withdrawals = db.query(Withdrawal).filter(
+        Withdrawal.user_id == current_user.id
+    ).order_by(desc(Withdrawal.created_at)).offset(skip).limit(limit).all()
+    
+    # Combinar e ordenar por data
+    transactions = []
+    for d in deposits:
+        transactions.append({
+            "id": d.id,
+            "type": "deposit",
+            "amount": d.amount,
+            "status": d.status.value,
+            "created_at": d.created_at.isoformat(),
+            "updated_at": d.updated_at.isoformat(),
+        })
+    
+    for w in withdrawals:
+        transactions.append({
+            "id": w.id,
+            "type": "withdrawal",
+            "amount": w.amount,
+            "status": w.status.value,
+            "created_at": w.created_at.isoformat(),
+            "updated_at": w.updated_at.isoformat(),
+        })
+    
+    # Ordenar por data (mais recente primeiro)
+    transactions.sort(key=lambda x: x["created_at"], reverse=True)
+    
+    return {
+        "transactions": transactions[:limit],
+        "total": len(transactions)
+    }
+
+
+@router.get("/my-bets")
+async def get_my_bets(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    status_filter: Optional[BetStatus] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Retorna apostas do usuário autenticado"""
+    query = db.query(Bet).filter(Bet.user_id == current_user.id)
+    
+    if status_filter:
+        query = query.filter(Bet.status == status_filter)
+    
+    bets = query.order_by(desc(Bet.created_at)).offset(skip).limit(limit).all()
+    
+    return [
+        {
+            "id": bet.id,
+            "game_id": bet.game_id,
+            "game_name": bet.game_name,
+            "provider": bet.provider,
+            "amount": bet.amount,
+            "win_amount": bet.win_amount,
+            "status": bet.status.value,
+            "transaction_id": bet.transaction_id,
+            "created_at": bet.created_at.isoformat(),
+            "updated_at": bet.updated_at.isoformat(),
+        }
+        for bet in bets
+    ]
