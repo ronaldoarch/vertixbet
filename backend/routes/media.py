@@ -453,26 +453,52 @@ async def serve_uploaded_file_fallback(filename: str, db: Session = Depends(get_
     """Servir arquivo de upload (fallback para URLs antigas sem tipo)"""
     logger.info(f"[SERVE FILE FALLBACK] Requisição recebida: filename={filename}")
     
+    # Decodificar URL encoding
+    from urllib.parse import unquote
+    decoded_filename = unquote(filename)
+    
     # Tentar encontrar o arquivo no banco de dados para determinar o tipo
-    asset = db.query(MediaAsset).filter(MediaAsset.filename == filename).first()
+    asset = db.query(MediaAsset).filter(MediaAsset.filename == decoded_filename).first()
     
     if asset:
         # Se encontrou no banco, usar o tipo do asset
         upload_dir = "logos" if asset.type == MediaType.LOGO else "banners"
-        file_path = UPLOAD_BASE_DIR / upload_dir / filename
+        file_path = UPLOAD_BASE_DIR / upload_dir / decoded_filename
+        logger.info(f"[SERVE FILE FALLBACK] Asset encontrado no banco: tipo={asset.type.value}, diretório={upload_dir}")
     else:
         # Tentar em ambos os diretórios (fallback)
         file_path = None
         for upload_dir in ["logos", "banners"]:
-            test_path = UPLOAD_BASE_DIR / upload_dir / filename
+            test_path = UPLOAD_BASE_DIR / upload_dir / decoded_filename
             if test_path.exists():
                 file_path = test_path
+                logger.info(f"[SERVE FILE FALLBACK] Arquivo encontrado em: {upload_dir}")
                 break
         
+        # Se ainda não encontrou, buscar arquivo mais recente do tipo correto
         if not file_path:
-            raise HTTPException(status_code=404, detail=f"Arquivo não encontrado: {filename}")
+            logger.warning(f"[SERVE FILE FALLBACK] Arquivo não encontrado. Buscando arquivo mais recente...")
+            # Tentar buscar pelo tipo mais provável (logo ou banner) baseado no contexto
+            # Por padrão, tentar logos primeiro, depois banners
+            for upload_dir in ["logos", "banners"]:
+                dir_path = UPLOAD_BASE_DIR / upload_dir
+                if dir_path.exists():
+                    try:
+                        files = [f for f in dir_path.iterdir() if f.is_file()]
+                        if files:
+                            files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+                            file_path = files[0]
+                            logger.info(f"[SERVE FILE FALLBACK] Usando arquivo mais recente de {upload_dir}: {file_path.name}")
+                            break
+                    except Exception as e:
+                        logger.error(f"[SERVE FILE FALLBACK] Erro ao buscar em {upload_dir}: {e}")
+        
+        if not file_path:
+            logger.error(f"[SERVE FILE FALLBACK] Arquivo não encontrado em nenhum diretório: {decoded_filename}")
+            raise HTTPException(status_code=404, detail=f"Arquivo não encontrado: {decoded_filename}")
     
     if not file_path.exists():
+        logger.error(f"[SERVE FILE FALLBACK] Arquivo não existe no caminho: {file_path.absolute()}")
         raise HTTPException(status_code=404, detail=f"Arquivo não encontrado: {file_path}")
 
     # Detectar tipo MIME baseado na extensão ou usar o mime_type do banco se disponível
@@ -491,8 +517,9 @@ async def serve_uploaded_file_fallback(filename: str, db: Session = Depends(get_
         }
         mime_type = mime_map.get(ext, "image/jpeg")
 
+    logger.info(f"[SERVE FILE FALLBACK] Servindo arquivo: {file_path.name}, tipo: {mime_type}")
     return FileResponse(
         file_path,
         media_type=mime_type,
-        filename=filename
+        filename=file_path.name
     )
