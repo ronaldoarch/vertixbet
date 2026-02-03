@@ -421,159 +421,159 @@ async def create_pix_withdrawal(
     try:
         # Usar usuário autenticado
         user = current_user
-    
-    # Verificar saldo
-    if user.balance < request.amount:
-        raise HTTPException(status_code=400, detail="Saldo insuficiente")
-    
-    if request.amount <= 0:
-        raise HTTPException(status_code=400, detail="Valor deve ser maior que zero")
-    
-    settings = db.query(FTDSettings).filter(FTDSettings.is_active == True).first()
-    min_withdrawal = getattr(settings, "min_withdrawal", 10.0) if settings else 10.0
-    if request.amount < min_withdrawal:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Valor mínimo de saque é R$ {min_withdrawal:.2f}".replace(".", ","),
-        )
-    
-    # Validar tipo de chave
-    valid_key_types = ["document", "phoneNumber", "email", "randomKey", "paymentCode"]
-    if request.pix_key_type not in valid_key_types:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Tipo de chave inválido. Deve ser um dos: {', '.join(valid_key_types)}"
-        )
-    
-    # Buscar gateway PIX ativo
-    gateway = get_active_pix_gateway(db)
-    
-    external_id = f"WTH_{user.id}_{int(datetime.utcnow().timestamp())}"
-    webhook_url = os.getenv("WEBHOOK_BASE_URL", "https://api.vertixbet.site")
-    
-    pix_response = None
-    metadata = {}
-    
-    if gateway.type == "gatebox":
-        # Gatebox
-        gatebox = get_gatebox_client(gateway)
-        if not gatebox:
+        
+        # Verificar saldo
+        if user.balance < request.amount:
+            raise HTTPException(status_code=400, detail="Saldo insuficiente")
+        
+        if request.amount <= 0:
+            raise HTTPException(status_code=400, detail="Valor deve ser maior que zero")
+        
+        settings = db.query(FTDSettings).filter(FTDSettings.is_active == True).first()
+        min_withdrawal = getattr(settings, "min_withdrawal", 10.0) if settings else 10.0
+        if request.amount < min_withdrawal:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Erro ao criar cliente Gatebox. Verifique as credenciais."
+                status_code=400,
+                detail=f"Valor mínimo de saque é R$ {min_withdrawal:.2f}".replace(".", ","),
             )
         
-        # Gatebox requer name e pode requerer documentNumber
-        # Usar display_name do usuário ou username como fallback
-        payer_name = user.display_name or user.username or "Cliente"
-        doc_validation = (request.document_validation or "").strip()
-        if not doc_validation:
-            # Se não fornecido, tentar usar CPF do usuário ou a própria chave PIX se for documento
-            if request.pix_key_type == "document":
-                doc_validation = "".join(c for c in request.pix_key if c.isdigit())
+        # Validar tipo de chave
+        valid_key_types = ["document", "phoneNumber", "email", "randomKey", "paymentCode"]
+        if request.pix_key_type not in valid_key_types:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Tipo de chave inválido. Deve ser um dos: {', '.join(valid_key_types)}"
+            )
+        
+        # Buscar gateway PIX ativo
+        gateway = get_active_pix_gateway(db)
+        
+        external_id = f"WTH_{user.id}_{int(datetime.utcnow().timestamp())}"
+        webhook_url = os.getenv("WEBHOOK_BASE_URL", "https://api.vertixbet.site")
+        
+        pix_response = None
+        metadata = {}
+        
+        if gateway.type == "gatebox":
+            # Gatebox
+            gatebox = get_gatebox_client(gateway)
+            if not gatebox:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Erro ao criar cliente Gatebox. Verifique as credenciais."
+                )
+            
+            # Gatebox requer name e pode requerer documentNumber
+            # Usar display_name do usuário ou username como fallback
+            payer_name = user.display_name or user.username or "Cliente"
+            doc_validation = (request.document_validation or "").strip()
             if not doc_validation:
-                doc_validation = user.cpf or ""
-        
-        try:
-            pix_response = await gatebox.withdraw_pix(
-                external_id=external_id,
-                key=request.pix_key,
-                name=payer_name,
-                amount=request.amount,
-                document_number=doc_validation if doc_validation else None,
-                description=f"Saque de R$ {request.amount:.2f}"
-            )
-        except Exception as e:
-            print(f"[WITHDRAWAL GATEBOX] Erro ao chamar API: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Erro ao processar saque no Gatebox: {str(e)}"
-            )
-        
-        if not pix_response:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Erro ao processar saque no Gatebox. {gatebox.last_error or 'Erro desconhecido'}"
-            )
-        
-        # Gatebox retorna resposta no formato: { "statusCode": 200, "data": { "transactionId": "...", "endToEnd": "...", ... } }
-        gatebox_data = pix_response.get("data") if pix_response.get("data") else pix_response
-        status_code = pix_response.get("statusCode")
-        
-        # Verificar se a resposta indica sucesso
-        if status_code and status_code != 200:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Gatebox retornou erro no saque. Status: {status_code}, Resposta: {pix_response}"
-            )
-        
-        metadata = {
-            "external_id": external_id,
-            "transaction_id": gatebox_data.get("transactionId") or gatebox_data.get("identifier"),
-            "end_to_end": gatebox_data.get("endToEnd"),
-            "gatebox_response": pix_response
-        }
-    else:
-        # SuitPay (padrão)
-        suitpay = get_suitpay_client(gateway)
-        callback_url = f"{webhook_url}/api/webhooks/suitpay/pix-cashout"
-        
-        # document_validation: quando a chave é CPF/CNPJ, usar a própria chave; senão usar SiteSettings
-        doc_validation = (request.document_validation or "").strip()
-        if not doc_validation:
-            if request.pix_key_type == "document":
-                doc_validation = "".join(c for c in request.pix_key if c.isdigit())
-            if not doc_validation:
-                s = db.query(SiteSettings).filter(SiteSettings.key == "pix_default_tax_id").first()
-                doc_validation = (s.value or "").strip() if s and s.value else ""
-
-        pix_response = await suitpay.transfer_pix(
-            key=request.pix_key,
-            type_key=request.pix_key_type,
-            value=request.amount,
-            callback_url=callback_url,
-            document_validation=doc_validation or None,
-            external_id=external_id
-        )
-        
-        if not pix_response:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Erro ao processar transferência PIX no gateway. Verifique se o IP do servidor está cadastrado na SuitPay."
-            )
-        
-        # Verificar resposta da API SuitPay
-        response_status = pix_response.get("response", "").upper()
-        if response_status != "OK":
-            error_messages = {
-                "ACCOUNT_DOCUMENTS_NOT_VALIDATED": "Conta não validada",
-                "NO_FUNDS": "Saldo insuficiente no gateway",
-                "PIX_KEY_NOT_FOUND": "Chave PIX não encontrada",
-                "UNAUTHORIZED_IP": "IP não autorizado. Cadastre o IP do servidor na SuitPay.",
-                "DOCUMENT_VALIDATE": "A chave PIX não pertence ao documento informado",
-                "DUPLICATE_EXTERNAL_ID": "External ID já foi utilizado",
-                "ERROR": "Erro interno no gateway"
+                # Se não fornecido, tentar usar CPF do usuário ou a própria chave PIX se for documento
+                if request.pix_key_type == "document":
+                    doc_validation = "".join(c for c in request.pix_key if c.isdigit())
+                if not doc_validation:
+                    doc_validation = user.cpf or ""
+            
+            try:
+                pix_response = await gatebox.withdraw_pix(
+                    external_id=external_id,
+                    key=request.pix_key,
+                    name=payer_name,
+                    amount=request.amount,
+                    document_number=doc_validation if doc_validation else None,
+                    description=f"Saque de R$ {request.amount:.2f}"
+                )
+            except Exception as e:
+                print(f"[WITHDRAWAL GATEBOX] Erro ao chamar API: {str(e)}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Erro ao processar saque no Gatebox: {str(e)}"
+                )
+            
+            if not pix_response:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"Erro ao processar saque no Gatebox. {gatebox.last_error or 'Erro desconhecido'}"
+                )
+            
+            # Gatebox retorna resposta no formato: { "statusCode": 200, "data": { "transactionId": "...", "endToEnd": "...", ... } }
+            gatebox_data = pix_response.get("data") if pix_response.get("data") else pix_response
+            status_code = pix_response.get("statusCode")
+            
+            # Verificar se a resposta indica sucesso
+            if status_code and status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"Gatebox retornou erro no saque. Status: {status_code}, Resposta: {pix_response}"
+                )
+            
+            metadata = {
+                "external_id": external_id,
+                "transaction_id": gatebox_data.get("transactionId") or gatebox_data.get("identifier"),
+                "end_to_end": gatebox_data.get("endToEnd"),
+                "gatebox_response": pix_response
             }
-            error_msg = error_messages.get(response_status, f"Erro: {response_status}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=error_msg
+        else:
+            # SuitPay (padrão)
+            suitpay = get_suitpay_client(gateway)
+            callback_url = f"{webhook_url}/api/webhooks/suitpay/pix-cashout"
+            
+            # document_validation: quando a chave é CPF/CNPJ, usar a própria chave; senão usar SiteSettings
+            doc_validation = (request.document_validation or "").strip()
+            if not doc_validation:
+                if request.pix_key_type == "document":
+                    doc_validation = "".join(c for c in request.pix_key if c.isdigit())
+                if not doc_validation:
+                    s = db.query(SiteSettings).filter(SiteSettings.key == "pix_default_tax_id").first()
+                    doc_validation = (s.value or "").strip() if s and s.value else ""
+
+            pix_response = await suitpay.transfer_pix(
+                key=request.pix_key,
+                type_key=request.pix_key_type,
+                value=request.amount,
+                callback_url=callback_url,
+                document_validation=doc_validation or None,
+                external_id=external_id
             )
+            
+            if not pix_response:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Erro ao processar transferência PIX no gateway. Verifique se o IP do servidor está cadastrado na SuitPay."
+                )
+            
+            # Verificar resposta da API SuitPay
+            response_status = pix_response.get("response", "").upper()
+            if response_status != "OK":
+                error_messages = {
+                    "ACCOUNT_DOCUMENTS_NOT_VALIDATED": "Conta não validada",
+                    "NO_FUNDS": "Saldo insuficiente no gateway",
+                    "PIX_KEY_NOT_FOUND": "Chave PIX não encontrada",
+                    "UNAUTHORIZED_IP": "IP não autorizado. Cadastre o IP do servidor na SuitPay.",
+                    "DOCUMENT_VALIDATE": "A chave PIX não pertence ao documento informado",
+                    "DUPLICATE_EXTERNAL_ID": "External ID já foi utilizado",
+                    "ERROR": "Erro interno no gateway"
+                }
+                error_msg = error_messages.get(response_status, f"Erro: {response_status}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=error_msg
+                )
+            
+            metadata = {
+                "pix_key": request.pix_key,
+                "pix_key_type": request.pix_key_type,
+                "document_validation": request.document_validation,
+                "external_id": external_id,
+                "suitpay_response": pix_response
+            }
         
-        metadata = {
-            "pix_key": request.pix_key,
-            "pix_key_type": request.pix_key_type,
-            "document_validation": request.document_validation,
-            "external_id": external_id,
-            "suitpay_response": pix_response
-        }
-    
-    # External ID para withdrawal: Gatebox usa identifier/transactionId dentro de data, SuitPay usa idTransaction ou external_id
-    if gateway.type == "gatebox":
-        gatebox_data = pix_response.get("data") if pix_response.get("data") else pix_response
-        external_id_for_withdrawal = gatebox_data.get("identifier") or gatebox_data.get("transactionId") or gatebox_data.get("externalId") or external_id
-    else:
-        external_id_for_withdrawal = pix_response.get("idTransaction") or external_id
+        # External ID para withdrawal: Gatebox usa identifier/transactionId dentro de data, SuitPay usa idTransaction ou external_id
+        if gateway.type == "gatebox":
+            gatebox_data = pix_response.get("data") if pix_response.get("data") else pix_response
+            external_id_for_withdrawal = gatebox_data.get("identifier") or gatebox_data.get("transactionId") or gatebox_data.get("externalId") or external_id
+        else:
+            external_id_for_withdrawal = pix_response.get("idTransaction") or external_id
     
         # Criar registro de saque
         withdrawal = Withdrawal(
