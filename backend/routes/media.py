@@ -323,9 +323,13 @@ async def get_public_logo(db: Session = Depends(get_db)):
 
 # Servir arquivos estáticos
 @public_router.get("/uploads/{media_type}/{filename}")
-async def serve_uploaded_file(media_type: str, filename: str):
+async def serve_uploaded_file(media_type: str, filename: str, db: Session = Depends(get_db)):
     """Servir arquivo de upload"""
     logger.info(f"[SERVE FILE] Requisição recebida: media_type={media_type}, filename={filename}")
+    
+    # Decodificar URL encoding (ex: %5B vira [, %20 vira espaço)
+    from urllib.parse import unquote
+    decoded_filename = unquote(filename)
     
     # Mapear tipo da URL para diretório físico (plural)
     dir_mapping = {
@@ -335,7 +339,72 @@ async def serve_uploaded_file(media_type: str, filename: str):
         "banners": "banners",
     }
     upload_dir = dir_mapping.get(media_type.lower(), media_type)
-    file_path = UPLOAD_BASE_DIR / upload_dir / filename
+    
+    # Tentar primeiro com o filename decodificado
+    file_path = UPLOAD_BASE_DIR / upload_dir / decoded_filename
+    
+    # Se não encontrou, buscar no banco para encontrar o filename correto
+    if not file_path.exists():
+        logger.warning(f"[SERVE FILE] Arquivo não encontrado: {decoded_filename}")
+        
+        # Buscar no banco de dados pelo filename (pode ser que o banco tenha o nome errado)
+        # Tentar buscar pelo filename exato primeiro
+        asset = db.query(MediaAsset).filter(
+            MediaAsset.filename == decoded_filename
+        ).first()
+        
+        # Se não encontrou, buscar pelo tipo e usar o arquivo mais recente ativo
+        if not asset:
+            media_type_enum = MediaType.LOGO if upload_dir == "logos" else MediaType.BANNER
+            asset = db.query(MediaAsset).filter(
+                MediaAsset.type == media_type_enum,
+                MediaAsset.is_active == True
+            ).order_by(MediaAsset.created_at.desc()).first()
+        
+        if asset and asset.filename:
+            # Tentar com o filename do banco
+            file_path = UPLOAD_BASE_DIR / upload_dir / asset.filename
+            logger.info(f"[SERVE FILE] Tentando com filename do banco: {asset.filename}")
+            
+            # Se ainda não encontrou, buscar arquivo mais recente do diretório
+            if not file_path.exists():
+                logger.warning(f"[SERVE FILE] Arquivo do banco também não existe. Buscando arquivo mais recente...")
+                dir_path = UPLOAD_BASE_DIR / upload_dir
+                if dir_path.exists():
+                    try:
+                        files = [f for f in dir_path.iterdir() if f.is_file()]
+                        if files:
+                            files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+                            file_path = files[0]
+                            logger.info(f"[SERVE FILE] Usando arquivo mais recente do diretório: {file_path.name}")
+                        else:
+                            raise HTTPException(status_code=404, detail=f"Nenhum arquivo encontrado no diretório {upload_dir}")
+                    except HTTPException:
+                        raise
+                    except Exception as e:
+                        logger.error(f"[SERVE FILE] Erro ao buscar arquivo alternativo: {e}")
+                        raise HTTPException(status_code=404, detail=f"Arquivo não encontrado: {decoded_filename}")
+                else:
+                    raise HTTPException(status_code=404, detail=f"Diretório não existe: {upload_dir}")
+        else:
+            # Se não encontrou no banco, tentar buscar arquivo mais recente do diretório
+            dir_path = UPLOAD_BASE_DIR / upload_dir
+            if dir_path.exists():
+                try:
+                    files = [f for f in dir_path.iterdir() if f.is_file()]
+                    if files:
+                        files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+                        file_path = files[0]
+                        logger.info(f"[SERVE FILE] Asset não encontrado no banco. Usando arquivo mais recente: {file_path.name}")
+                    else:
+                        raise HTTPException(status_code=404, detail=f"Nenhum arquivo encontrado no diretório {upload_dir}")
+                except HTTPException:
+                    raise
+                except Exception as e:
+                    logger.error(f"[SERVE FILE] Erro ao buscar arquivo alternativo: {e}")
+                    raise HTTPException(status_code=404, detail=f"Arquivo não encontrado: {decoded_filename}")
+            else:
+                raise HTTPException(status_code=404, detail=f"Diretório não existe: {upload_dir}")
     
     # Log para debug
     logger.info(f"[SERVE FILE] Caminho completo: {file_path.absolute()}")
@@ -368,11 +437,13 @@ async def serve_uploaded_file(media_type: str, filename: str):
     }
     mime_type = mime_map.get(ext, "image/jpeg")
 
-    logger.info(f"[SERVE FILE] Servindo arquivo com sucesso: {filename}, tipo: {mime_type}")
+    # Usar o nome real do arquivo, não o da URL
+    actual_filename = file_path.name
+    logger.info(f"[SERVE FILE] Servindo arquivo com sucesso: {actual_filename}, tipo: {mime_type}")
     return FileResponse(
         file_path,
         media_type=mime_type,
-        filename=filename
+        filename=actual_filename
     )
 
 
