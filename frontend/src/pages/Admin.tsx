@@ -650,7 +650,10 @@ function GatewaysTab({ token }: { token: string }) {
     is_active: true, 
     client_id: '',
     client_secret: '',
-    sandbox: true
+    sandbox: true,
+    username: '',
+    password: '',
+    api_url: 'https://api.gatebox.com.br'
   });
   const [editingId, setEditingId] = useState<number | null>(null);
 
@@ -667,16 +670,24 @@ function GatewaysTab({ token }: { token: string }) {
   };
 
   const resetForm = () => {
-    setForm({ name: '', type: 'pix', is_active: true, client_id: '', client_secret: '', sandbox: true });
+    setForm({ name: '', type: 'pix', is_active: true, client_id: '', client_secret: '', sandbox: true, username: '', password: '', api_url: 'https://api.gatebox.com.br' });
     setEditingId(null);
   };
 
   const prepareCredentials = () => {
-    return JSON.stringify({
-      client_id: form.client_id,
-      client_secret: form.client_secret,
-      sandbox: form.sandbox
-    });
+    if (form.type === 'gatebox') {
+      return JSON.stringify({
+        username: form.username,
+        password: form.password,
+        api_url: form.api_url || 'https://api.gatebox.com.br'
+      });
+    } else {
+      return JSON.stringify({
+        client_id: form.client_id,
+        client_secret: form.client_secret,
+        sandbox: form.sandbox
+      });
+    }
   };
 
   const create = async () => {
@@ -743,19 +754,31 @@ function GatewaysTab({ token }: { token: string }) {
       is_active: gateway.is_active ?? true,
       client_id: '',
       client_secret: '',
-      sandbox: true
+      sandbox: true,
+      username: '',
+      password: '',
+      api_url: 'https://api.gatebox.com.br'
     });
 
     // Parse credentials se existir
     if (gateway.credentials) {
       try {
         const creds = JSON.parse(gateway.credentials);
-        setForm(prev => ({
-          ...prev,
-          client_id: creds.client_id || creds.ci || '',
-          client_secret: creds.client_secret || creds.cs || '',
-          sandbox: creds.sandbox !== undefined ? creds.sandbox : true
-        }));
+        if (gateway.type === 'gatebox') {
+          setForm(prev => ({
+            ...prev,
+            username: creds.username || '',
+            password: creds.password || '',
+            api_url: creds.api_url || 'https://api.gatebox.com.br'
+          }));
+        } else {
+          setForm(prev => ({
+            ...prev,
+            client_id: creds.client_id || creds.ci || '',
+            client_secret: creds.client_secret || creds.cs || '',
+            sandbox: creds.sandbox !== undefined ? creds.sandbox : true
+          }));
+        }
       } catch (e) {
         // Se não for JSON, deixa vazio
       }
@@ -808,43 +831,79 @@ function GatewaysTab({ token }: { token: string }) {
               value={form.type} 
               onChange={e=>setForm({...form, type:e.target.value})}
             >
-              <option value="pix">PIX</option>
+              <option value="pix">PIX (SuitPay)</option>
+              <option value="gatebox">Gatebox</option>
               <option value="card">Cartão</option>
               <option value="boleto">Boleto</option>
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">Client ID (ci)</label>
-            <input 
-              type="text"
-              className="w-full bg-gray-700 rounded px-3 py-2 text-sm border border-gray-600 focus:border-[#d4af37] focus:outline-none" 
-              placeholder="Client ID da SuitPay"
-              value={form.client_id} 
-              onChange={e=>setForm({...form, client_id:e.target.value})}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">Client Secret (cs)</label>
-            <input 
-              type="password"
-              className="w-full bg-gray-700 rounded px-3 py-2 text-sm border border-gray-600 focus:border-[#d4af37] focus:outline-none" 
-              placeholder="Client Secret da SuitPay"
-              value={form.client_secret} 
-              onChange={e=>setForm({...form, client_secret:e.target.value})}
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <input 
-              type="checkbox" 
-              checked={form.sandbox} 
-              onChange={e=>setForm({...form, sandbox:e.target.checked})}
-              className="w-4 h-4"
-            />
-            <label className="text-sm text-gray-300">Ambiente Sandbox</label>
-          </div>
+          {form.type === 'gatebox' ? (
+            <>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Username</label>
+                <input 
+                  type="text"
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-sm border border-gray-600 focus:border-[#d4af37] focus:outline-none" 
+                  placeholder="Username do Gatebox"
+                  value={form.username} 
+                  onChange={e=>setForm({...form, username:e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Password</label>
+                <input 
+                  type="password"
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-sm border border-gray-600 focus:border-[#d4af37] focus:outline-none" 
+                  placeholder="Password do Gatebox"
+                  value={form.password} 
+                  onChange={e=>setForm({...form, password:e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">API URL (opcional)</label>
+                <input 
+                  type="text"
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-sm border border-gray-600 focus:border-[#d4af37] focus:outline-none" 
+                  placeholder="https://api.gatebox.com.br"
+                  value={form.api_url} 
+                  onChange={e=>setForm({...form, api_url:e.target.value})}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Client ID (ci)</label>
+                <input 
+                  type="text"
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-sm border border-gray-600 focus:border-[#d4af37] focus:outline-none" 
+                  placeholder="Client ID da SuitPay"
+                  value={form.client_id} 
+                  onChange={e=>setForm({...form, client_id:e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Client Secret (cs)</label>
+                <input 
+                  type="password"
+                  className="w-full bg-gray-700 rounded px-3 py-2 text-sm border border-gray-600 focus:border-[#d4af37] focus:outline-none" 
+                  placeholder="Client Secret da SuitPay"
+                  value={form.client_secret} 
+                  onChange={e=>setForm({...form, client_secret:e.target.value})}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="checkbox" 
+                  checked={form.sandbox} 
+                  onChange={e=>setForm({...form, sandbox:e.target.checked})}
+                  className="w-4 h-4"
+                />
+                <label className="text-sm text-gray-300">Ambiente Sandbox</label>
+              </div>
+            </>
+          )}
 
           <div className="flex items-center gap-2">
             <input 

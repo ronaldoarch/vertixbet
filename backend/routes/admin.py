@@ -1143,15 +1143,15 @@ async def get_stats(
         func.date(Deposit.created_at) == today
     ).with_entities(func.sum(Deposit.amount)).scalar() or 0.0
     
-    # PIX recebido hoje (depósitos PIX aprovados hoje)
+    # PIX recebido hoje (depósitos PIX aprovados hoje - SuitPay ou Gatebox)
     pix_recebido_hoje = db.query(Deposit).join(Gateway).filter(
         Deposit.status == TransactionStatus.APPROVED,
-        Gateway.type == "pix",
+        Gateway.type.in_(["pix", "gatebox"]),
         func.date(Deposit.created_at) == today
     ).with_entities(func.sum(Deposit.amount)).scalar() or 0.0
     pix_recebido_count_hoje = db.query(Deposit).join(Gateway).filter(
         Deposit.status == TransactionStatus.APPROVED,
-        Gateway.type == "pix",
+        Gateway.type.in_(["pix", "gatebox"]),
         func.date(Deposit.created_at) == today
     ).count()
     
@@ -1172,25 +1172,25 @@ async def get_stats(
         func.date(Withdrawal.created_at) == today
     ).with_entities(func.sum(Withdrawal.amount)).scalar() or 0.0
     
-    # PIX feito hoje (saques PIX aprovados hoje)
+    # PIX feito hoje (saques PIX aprovados hoje - SuitPay ou Gatebox)
     pix_feito_hoje = db.query(Withdrawal).join(Gateway).filter(
         Withdrawal.status == TransactionStatus.APPROVED,
-        Gateway.type == "pix",
+        Gateway.type.in_(["pix", "gatebox"]),
         func.date(Withdrawal.created_at) == today
     ).with_entities(func.sum(Withdrawal.amount)).scalar() or 0.0
     pix_feito_count_hoje = db.query(Withdrawal).join(Gateway).filter(
         Withdrawal.status == TransactionStatus.APPROVED,
-        Gateway.type == "pix",
+        Gateway.type.in_(["pix", "gatebox"]),
         func.date(Withdrawal.created_at) == today
     ).count()
     
-    # PIX gerado hoje (pendentes ou aprovados)
+    # PIX gerado hoje (pendentes ou aprovados - SuitPay ou Gatebox)
     pix_gerado_hoje = db.query(Deposit).join(Gateway).filter(
-        Gateway.type == "pix",
+        Gateway.type.in_(["pix", "gatebox"]),
         func.date(Deposit.created_at) == today
     ).count()
     pix_gerado_pago_hoje = db.query(Deposit).join(Gateway).filter(
-        Gateway.type == "pix",
+        Gateway.type.in_(["pix", "gatebox"]),
         Deposit.status == TransactionStatus.APPROVED,
         func.date(Deposit.created_at) == today
     ).count()

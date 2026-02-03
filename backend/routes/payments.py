@@ -1,5 +1,5 @@
 """
-Rotas públicas para pagamentos (depósitos e saques) usando SuitPay
+Rotas públicas para pagamentos (depósitos e saques) usando SuitPay e Gatebox
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
@@ -8,6 +8,7 @@ from database import get_db
 from sqlalchemy import func
 from models import User, Deposit, Withdrawal, Gateway, TransactionStatus, Bet, BetStatus, Affiliate, FTDSettings, FTD, Coupon, CouponType, SiteSettings, Promotion, IGameWinAgent
 from suitpay_api import SuitPayAPI
+from gatebox_api import GateboxAPI, get_gatebox_client
 from schemas import DepositResponse, WithdrawalResponse, DepositPixRequest, WithdrawalPixRequest, AffiliateResponse
 from dependencies import get_current_user
 from igamewin_api import get_igamewin_api
@@ -23,11 +24,18 @@ affiliate_router = APIRouter(prefix="/api/public/affiliate", tags=["affiliate"])
 
 
 def get_active_pix_gateway(db: Session) -> Gateway:
-    """Busca gateway PIX ativo"""
+    """Busca gateway PIX ativo (SuitPay ou Gatebox)"""
+    # Prioridade: gatebox primeiro, depois pix (SuitPay)
     gateway = db.query(Gateway).filter(
-        Gateway.type == "pix",
+        Gateway.type == "gatebox",
         Gateway.is_active == True
     ).first()
+    
+    if not gateway:
+        gateway = db.query(Gateway).filter(
+            Gateway.type == "pix",
+            Gateway.is_active == True
+        ).first()
     
     if not gateway:
         raise HTTPException(
@@ -164,65 +172,117 @@ async def create_pix_deposit(
     # Buscar gateway PIX ativo
     gateway = get_active_pix_gateway(db)
     
-    # Criar cliente SuitPay
-    suitpay = get_suitpay_client(gateway)
-    
     # Gerar número único da requisição
     request_number = f"DEP_{user.id}_{int(datetime.utcnow().timestamp())}"
-    
-    # Data de vencimento (30 dias a partir de hoje)
-    due_date = (datetime.utcnow() + timedelta(days=30)).strftime("%Y-%m-%d")
+    external_id = request_number
     
     # URL do webhook (usar variável de ambiente ou construir)
     webhook_url = os.getenv("WEBHOOK_BASE_URL", "https://api.vertixbet.site")
-    callback_url = f"{webhook_url}/api/webhooks/suitpay/pix-cashin"
     
     print(f"[DEPOSIT PIX] Criando depósito de R$ {request.amount} para usuário {user.id}")
-    print(f"[DEPOSIT PIX] Webhook URL configurada: {callback_url}")
-    print(f"[DEPOSIT PIX] Request Number: {request_number}")
+    print(f"[DEPOSIT PIX] Gateway: {gateway.type}")
     
-    # Gerar código PIX conforme documentação oficial
-    pix_response = await suitpay.generate_pix_payment(
-        request_number=request_number,
-        due_date=due_date,
-        amount=request.amount,
-        client_name=payer_name,
-        client_document=payer_tax_id,
-        client_email=payer_email,
-        client_phone=payer_phone or None,
-        callback_url=callback_url
-    )
+    pix_response = None
+    metadata = {}
     
-    if not pix_response:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Erro ao gerar código PIX no gateway. Verifique as credenciais e se o gateway está ativo."
+    if gateway.type == "gatebox":
+        # Gatebox
+        gatebox = get_gatebox_client(gateway)
+        if not gatebox:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erro ao criar cliente Gatebox. Verifique as credenciais."
+            )
+        
+        callback_url = f"{webhook_url}/api/webhooks/gatebox/pix-cashin"
+        print(f"[DEPOSIT PIX] Webhook URL: {callback_url}")
+        
+        pix_response = await gatebox.create_pix_qrcode(
+            external_id=external_id,
+            amount=request.amount,
+            document=payer_tax_id,
+            name=payer_name,
+            expire=3600,  # 1 hora
+            email=payer_email,
+            phone=payer_phone or None,
+            identification=f"Depósito - {user.username}",
+            description=f"Depósito de R$ {request.amount:.2f}"
         )
-    
-    # Validar campos obrigatórios na resposta
-    if not pix_response.get("paymentCode"):
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Resposta inválida do gateway SuitPay. Campo 'paymentCode' não encontrado. Resposta: {pix_response}"
+        
+        if not pix_response:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Erro ao gerar código PIX no Gatebox. {gatebox.last_error or 'Erro desconhecido'}"
+            )
+        
+        # Gatebox retorna campos diferentes - verificar estrutura da resposta
+        qr_code = pix_response.get("qrCode") or pix_response.get("emvqrcps") or pix_response.get("qrcode")
+        if not qr_code:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Resposta inválida do Gatebox. QR Code não encontrado. Resposta: {pix_response}"
+            )
+        
+        metadata = {
+            "pix_code": qr_code,
+            "pix_qr_code_base64": pix_response.get("qrCodeBase64") or pix_response.get("qrcodeBase64"),
+            "transaction_id": pix_response.get("transactionId") or pix_response.get("transaction_id"),
+            "external_id": external_id,
+            "gatebox_response": pix_response
+        }
+    else:
+        # SuitPay (padrão)
+        suitpay = get_suitpay_client(gateway)
+        due_date = (datetime.utcnow() + timedelta(days=30)).strftime("%Y-%m-%d")
+        callback_url = f"{webhook_url}/api/webhooks/suitpay/pix-cashin"
+        
+        print(f"[DEPOSIT PIX] Webhook URL: {callback_url}")
+        print(f"[DEPOSIT PIX] Request Number: {request_number}")
+        
+        pix_response = await suitpay.generate_pix_payment(
+            request_number=request_number,
+            due_date=due_date,
+            amount=request.amount,
+            client_name=payer_name,
+            client_document=payer_tax_id,
+            client_email=payer_email,
+            client_phone=payer_phone or None,
+            callback_url=callback_url
         )
+        
+        if not pix_response:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Erro ao gerar código PIX no gateway. Verifique as credenciais e se o gateway está ativo."
+            )
+        
+        if not pix_response.get("paymentCode"):
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Resposta inválida do gateway SuitPay. Campo 'paymentCode' não encontrado. Resposta: {pix_response}"
+            )
+        
+        metadata = {
+            "pix_code": pix_response.get("paymentCode"),
+            "pix_qr_code_base64": pix_response.get("paymentCodeBase64"),
+            "request_number": request_number,
+            "suitpay_response": pix_response
+        }
     
-    metadata = {
-        "pix_code": pix_response.get("paymentCode"),
-        "pix_qr_code_base64": pix_response.get("paymentCodeBase64"),
-        "request_number": request_number,
-        "suitpay_response": pix_response
-    }
     if coupon_id is not None and bonus_amount > 0:
         metadata["coupon_id"] = coupon_id
         metadata["coupon_code"] = request.coupon_code.strip().upper()
         metadata["bonus_amount"] = bonus_amount
+    
+    # External ID: Gatebox usa transactionId, SuitPay usa idTransaction ou request_number
+    external_id_for_deposit = pix_response.get("transactionId") or pix_response.get("idTransaction") or external_id
     deposit = Deposit(
         user_id=user.id,
         gateway_id=gateway.id,
         amount=request.amount,
         status=TransactionStatus.PENDING,
         transaction_id=str(uuid.uuid4()),
-        external_id=pix_response.get("idTransaction") or request_number,
+        external_id=external_id_for_deposit,
         metadata_json=json.dumps(metadata)
     )
     
@@ -235,8 +295,12 @@ async def create_pix_deposit(
     print(f"[DEPOSIT PIX] - External ID: {deposit.external_id}")
     print(f"[DEPOSIT PIX] - Status: {deposit.status}")
     print(f"[DEPOSIT PIX] - Valor: R$ {deposit.amount}")
-    print(f"[DEPOSIT PIX] - Webhook será chamado em: {callback_url}")
-    print(f"[DEPOSIT PIX] - Aguardando webhook da SuitPay...")
+    print(f"[DEPOSIT PIX] - Gateway: {gateway.type}")
+    if gateway.type == "gatebox":
+        print(f"[DEPOSIT PIX] - Aguardando webhook do Gatebox...")
+    else:
+        print(f"[DEPOSIT PIX] - Webhook será chamado em: {callback_url}")
+        print(f"[DEPOSIT PIX] - Aguardando webhook da SuitPay...")
     
     return deposit
 
@@ -286,55 +350,105 @@ async def create_pix_withdrawal(
     # Buscar gateway PIX ativo
     gateway = get_active_pix_gateway(db)
     
-    # Criar cliente SuitPay
-    suitpay = get_suitpay_client(gateway)
-    
-    # URL do webhook
-    webhook_url = os.getenv("WEBHOOK_BASE_URL", "https://api.vertixbet.site")
-    callback_url = f"{webhook_url}/api/webhooks/suitpay/pix-cashout"
-    
     external_id = f"WTH_{user.id}_{int(datetime.utcnow().timestamp())}"
-    # document_validation: quando a chave é CPF/CNPJ, usar a própria chave; senão usar SiteSettings
-    doc_validation = (request.document_validation or "").strip()
-    if not doc_validation:
-        if request.pix_key_type == "document":
-            doc_validation = "".join(c for c in request.pix_key if c.isdigit())
+    webhook_url = os.getenv("WEBHOOK_BASE_URL", "https://api.vertixbet.site")
+    
+    pix_response = None
+    metadata = {}
+    
+    if gateway.type == "gatebox":
+        # Gatebox
+        gatebox = get_gatebox_client(gateway)
+        if not gatebox:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erro ao criar cliente Gatebox. Verifique as credenciais."
+            )
+        
+        # Gatebox requer name e pode requerer documentNumber
+        payer_name = request.payer_name or user.display_name or user.username or "Cliente"
+        doc_validation = (request.document_validation or "").strip()
         if not doc_validation:
-            s = db.query(SiteSettings).filter(SiteSettings.key == "pix_default_tax_id").first()
-            doc_validation = (s.value or "").strip() if s and s.value else ""
-
-    transfer_response = await suitpay.transfer_pix(
-        key=request.pix_key,
-        type_key=request.pix_key_type,
-        value=request.amount,
-        callback_url=callback_url,
-        document_validation=doc_validation or None,
-        external_id=external_id
-    )
-    
-    if not transfer_response:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Erro ao processar transferência PIX no gateway. Verifique se o IP do servidor está cadastrado na SuitPay."
+            doc_validation = user.cpf or ""
+        
+        pix_response = await gatebox.withdraw_pix(
+            external_id=external_id,
+            key=request.pix_key,
+            name=payer_name,
+            amount=request.amount,
+            document_number=doc_validation if doc_validation else None,
+            description=f"Saque de R$ {request.amount:.2f}"
         )
-    
-    # Verificar resposta da API
-    response_status = transfer_response.get("response", "").upper()
-    if response_status != "OK":
-        error_messages = {
-            "ACCOUNT_DOCUMENTS_NOT_VALIDATED": "Conta não validada",
-            "NO_FUNDS": "Saldo insuficiente no gateway",
-            "PIX_KEY_NOT_FOUND": "Chave PIX não encontrada",
-            "UNAUTHORIZED_IP": "IP não autorizado. Cadastre o IP do servidor na SuitPay.",
-            "DOCUMENT_VALIDATE": "A chave PIX não pertence ao documento informado",
-            "DUPLICATE_EXTERNAL_ID": "External ID já foi utilizado",
-            "ERROR": "Erro interno no gateway"
+        
+        if not pix_response:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Erro ao processar saque no Gatebox. {gatebox.last_error or 'Erro desconhecido'}"
+            )
+        
+        metadata = {
+            "external_id": external_id,
+            "transaction_id": pix_response.get("transactionId"),
+            "end_to_end": pix_response.get("endToEnd"),
+            "gatebox_response": pix_response
         }
-        error_msg = error_messages.get(response_status, f"Erro: {response_status}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error_msg
+    else:
+        # SuitPay (padrão)
+        suitpay = get_suitpay_client(gateway)
+        callback_url = f"{webhook_url}/api/webhooks/suitpay/pix-cashout"
+        
+        # document_validation: quando a chave é CPF/CNPJ, usar a própria chave; senão usar SiteSettings
+        doc_validation = (request.document_validation or "").strip()
+        if not doc_validation:
+            if request.pix_key_type == "document":
+                doc_validation = "".join(c for c in request.pix_key if c.isdigit())
+            if not doc_validation:
+                s = db.query(SiteSettings).filter(SiteSettings.key == "pix_default_tax_id").first()
+                doc_validation = (s.value or "").strip() if s and s.value else ""
+
+        pix_response = await suitpay.transfer_pix(
+            key=request.pix_key,
+            type_key=request.pix_key_type,
+            value=request.amount,
+            callback_url=callback_url,
+            document_validation=doc_validation or None,
+            external_id=external_id
         )
+        
+        if not pix_response:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Erro ao processar transferência PIX no gateway. Verifique se o IP do servidor está cadastrado na SuitPay."
+            )
+        
+        # Verificar resposta da API SuitPay
+        response_status = pix_response.get("response", "").upper()
+        if response_status != "OK":
+            error_messages = {
+                "ACCOUNT_DOCUMENTS_NOT_VALIDATED": "Conta não validada",
+                "NO_FUNDS": "Saldo insuficiente no gateway",
+                "PIX_KEY_NOT_FOUND": "Chave PIX não encontrada",
+                "UNAUTHORIZED_IP": "IP não autorizado. Cadastre o IP do servidor na SuitPay.",
+                "DOCUMENT_VALIDATE": "A chave PIX não pertence ao documento informado",
+                "DUPLICATE_EXTERNAL_ID": "External ID já foi utilizado",
+                "ERROR": "Erro interno no gateway"
+            }
+            error_msg = error_messages.get(response_status, f"Erro: {response_status}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg
+            )
+        
+        metadata = {
+            "pix_key": request.pix_key,
+            "pix_key_type": request.pix_key_type,
+            "document_validation": request.document_validation,
+            "external_id": external_id,
+            "suitpay_response": pix_response
+        }
+    
+    # External ID para withdrawal: Gatebox usa transactionId, SuitPay usa idTransaction ou external_id
+    external_id_for_withdrawal = pix_response.get("transactionId") or pix_response.get("idTransaction") or external_id
     
     # Criar registro de saque
     withdrawal = Withdrawal(
@@ -343,14 +457,8 @@ async def create_pix_withdrawal(
         amount=request.amount,
         status=TransactionStatus.PENDING,
         transaction_id=str(uuid.uuid4()),
-        external_id=transfer_response.get("idTransaction") or external_id,
-        metadata_json=json.dumps({
-            "pix_key": request.pix_key,
-            "pix_key_type": request.pix_key_type,
-            "document_validation": request.document_validation,
-            "external_id": external_id,
-            "suitpay_response": transfer_response
-        })
+        external_id=external_id_for_withdrawal,
+        metadata_json=json.dumps(metadata)
     )
     
     # Bloquear saldo do usuário
@@ -702,12 +810,222 @@ async def webhook_pix_cashout(request: Request, db: Session = Depends(get_db)):
         withdrawal.metadata_json = json.dumps(metadata)
         
         db.commit()
-        
+
         return {"status": "ok", "message": "Webhook processado com sucesso"}
     
     except Exception as e:
         print(f"Erro ao processar webhook PIX Cash-out: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erro ao processar webhook: {str(e)}")
+
+
+# ========== GATEBOX WEBHOOKS ==========
+@webhook_router.get("/gatebox/pix-cashin")
+async def webhook_gatebox_cashin_info():
+    """Informações sobre o webhook de Cash-in do Gatebox"""
+    return {
+        "status": "ok",
+        "message": "Webhook endpoint está acessível",
+        "endpoint": "/api/webhooks/gatebox/pix-cashin",
+        "method": "POST",
+        "note": "Gatebox pode não ter webhook automático. Use polling via /api/webhooks/gatebox/check-status",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+@webhook_router.post("/gatebox/pix-cashin")
+async def webhook_gatebox_cashin(request: Request, db: Session = Depends(get_db)):
+    """
+    Webhook para receber notificações de PIX Cash-in (depósitos) do Gatebox
+    Nota: Gatebox pode não ter webhook automático - use polling via check-status se necessário
+    """
+    try:
+        data = await request.json()
+        print(f"[WEBHOOK GATEBOX CASH-IN] Dados recebidos: {json.dumps(data, indent=2)}")
+        
+        # Buscar gateway Gatebox ativo
+        gateway = db.query(Gateway).filter(
+            Gateway.type == "gatebox",
+            Gateway.is_active == True
+        ).first()
+        
+        if not gateway:
+            return {"status": "ok", "message": "Gateway Gatebox não encontrado"}
+        
+        # Processar webhook - estrutura depende do que Gatebox enviar
+        transaction_id = data.get("transactionId") or data.get("transaction_id")
+        external_id = data.get("externalId") or data.get("external_id")
+        status_val = data.get("status") or data.get("statusTransaction")
+        amount = data.get("amount") or data.get("value")
+        
+        # Buscar depósito
+        deposit = None
+        if external_id:
+            deposit = db.query(Deposit).filter(Deposit.external_id == external_id).first()
+        if not deposit and transaction_id:
+            deposit = db.query(Deposit).filter(Deposit.external_id == transaction_id).first()
+        
+        if not deposit:
+            return {"status": "ok", "message": "Depósito não encontrado"}
+        
+        # Atualizar status
+        status_upper = str(status_val).upper() if status_val else ""
+        if status_upper in ["PAID", "COMPLETED", "SUCCESS", "CONFIRMED", "APPROVED"]:
+            if deposit.status != TransactionStatus.APPROVED:
+                # Mesma lógica do SuitPay para aprovar depósito
+                user = db.query(User).filter(User.id == deposit.user_id).first()
+                bonus_to_credit = 0.0
+                dep_meta = json.loads(deposit.metadata_json) if deposit.metadata_json else {}
+                if dep_meta.get("coupon_id") and dep_meta.get("bonus_amount"):
+                    bonus_to_credit = float(dep_meta["bonus_amount"])
+                    coupon = db.query(Coupon).filter(Coupon.id == dep_meta["coupon_id"]).first()
+                    if coupon:
+                        coupon.used_count = (coupon.used_count or 0) + 1
+                is_first_deposit = db.query(FTD).filter(FTD.user_id == deposit.user_id).first() is None
+                ftd_bonus = 0.0
+                reload_bonus = 0.0
+                ftd_settings = db.query(FTDSettings).filter(FTDSettings.is_active == True).first()
+                if user and is_first_deposit:
+                    ftd_pct = getattr(ftd_settings, "ftd_bonus_percentage", 0.0) or 0.0
+                    if ftd_pct > 0:
+                        ftd_bonus = round(deposit.amount * (ftd_pct / 100.0), 2)
+                        bonus_to_credit += ftd_bonus
+                    pass_rate = getattr(ftd_settings, "pass_rate", 0.0) if ftd_settings else 0.0
+                    ftd = FTD(
+                        user_id=deposit.user_id,
+                        deposit_id=deposit.id,
+                        amount=deposit.amount,
+                        is_first_deposit=True,
+                        pass_rate=pass_rate,
+                        status=TransactionStatus.APPROVED
+                    )
+                    db.add(ftd)
+                elif user and ftd_settings:
+                    reload_pct = getattr(ftd_settings, "reload_bonus_percentage", 0.0) or 0.0
+                    reload_min = getattr(ftd_settings, "reload_bonus_min_deposit", 0.0) or 0.0
+                    if reload_pct > 0 and deposit.amount >= reload_min:
+                        reload_bonus = round(deposit.amount * (reload_pct / 100.0), 2)
+                        bonus_to_credit += reload_bonus
+                if user:
+                    bonus_bal = getattr(user, "bonus_balance", 0.0) or 0.0
+                    user.balance += deposit.amount
+                    user.bonus_balance = bonus_bal + bonus_to_credit
+                    dep_meta["total_bonus_credited"] = bonus_to_credit
+                    deposit.metadata_json = json.dumps(dep_meta)
+                    if user.referred_by_affiliate_id:
+                        aff = db.query(Affiliate).filter(Affiliate.id == user.referred_by_affiliate_id).first()
+                        if aff and aff.is_active:
+                            aff_user = db.query(User).filter(User.id == aff.user_id).first()
+                            if aff_user:
+                                if is_first_deposit and (aff.cpa_amount or 0) > 0:
+                                    cpa_to_credit = float(aff.cpa_amount)
+                                    aff.total_cpa_earned = (aff.total_cpa_earned or 0) + cpa_to_credit
+                                if (aff.revshare_percentage or 0) > 0:
+                                    revshare_to_credit = round(deposit.amount * (aff.revshare_percentage / 100.0), 2)
+                                    aff.total_revshare_earned = (aff.total_revshare_earned or 0) + revshare_to_credit
+                                    aff_user.balance = (aff_user.balance or 0) + revshare_to_credit
+                deposit.status = TransactionStatus.APPROVED
+                db.commit()
+        
+        return {"status": "ok", "message": "Webhook processado"}
+    except Exception as e:
+        print(f"[WEBHOOK GATEBOX CASH-IN] Erro: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "message": str(e)}
+
+
+@webhook_router.post("/gatebox/check-status")
+async def gatebox_check_status(
+    external_id: Optional[str] = None,
+    transaction_id: Optional[str] = None,
+    end_to_end: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Consulta status de transação Gatebox via API (polling)
+    Útil quando Gatebox não tem webhook automático
+    """
+    try:
+        gateway = db.query(Gateway).filter(
+            Gateway.type == "gatebox",
+            Gateway.is_active == True
+        ).first()
+        
+        if not gateway:
+            raise HTTPException(status_code=404, detail="Gateway Gatebox não encontrado")
+        
+        gatebox = get_gatebox_client(gateway)
+        if not gatebox:
+            raise HTTPException(status_code=500, detail="Erro ao criar cliente Gatebox")
+        
+        status_data = await gatebox.get_pix_status(
+            transaction_id=transaction_id,
+            external_id=external_id,
+            end_to_end=end_to_end
+        )
+        
+        if not status_data:
+            raise HTTPException(status_code=502, detail=f"Erro ao consultar status. {gatebox.last_error or 'Erro desconhecido'}")
+        
+        # Processar status e atualizar depósito/saque se necessário
+        # (mesma lógica do webhook)
+        
+        return {"status": "ok", "data": status_data}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@webhook_router.post("/gatebox/pix-cashout")
+async def webhook_gatebox_cashout(request: Request, db: Session = Depends(get_db)):
+    """
+    Webhook para receber notificações de PIX Cash-out (saques) do Gatebox
+    """
+    try:
+        data = await request.json()
+        print(f"[WEBHOOK GATEBOX CASH-OUT] Dados recebidos: {json.dumps(data, indent=2)}")
+        
+        gateway = db.query(Gateway).filter(
+            Gateway.type == "gatebox",
+            Gateway.is_active == True
+        ).first()
+        
+        if not gateway:
+            return {"status": "ok", "message": "Gateway Gatebox não encontrado"}
+        
+        transaction_id = data.get("transactionId") or data.get("transaction_id")
+        external_id = data.get("externalId") or data.get("external_id")
+        status_val = data.get("status") or data.get("statusTransaction")
+        
+        withdrawal = None
+        if external_id:
+            withdrawal = db.query(Withdrawal).filter(Withdrawal.external_id == external_id).first()
+        if not withdrawal and transaction_id:
+            withdrawal = db.query(Withdrawal).filter(Withdrawal.external_id == transaction_id).first()
+        
+        if not withdrawal:
+            return {"status": "ok", "message": "Saque não encontrado"}
+        
+        status_upper = str(status_val).upper() if status_val else ""
+        if status_upper in ["PAID", "COMPLETED", "SUCCESS", "CONFIRMED", "APPROVED"]:
+            withdrawal.status = TransactionStatus.APPROVED
+        elif status_upper in ["CANCELED", "CANCELLED", "FAILED", "ERROR"]:
+            if withdrawal.status == TransactionStatus.PENDING:
+                user = db.query(User).filter(User.id == withdrawal.user_id).first()
+                if user:
+                    user.balance += withdrawal.amount
+            withdrawal.status = TransactionStatus.CANCELLED
+        
+        metadata = json.loads(withdrawal.metadata_json) if withdrawal.metadata_json else {}
+        metadata["webhook_data"] = data
+        metadata["webhook_received_at"] = datetime.utcnow().isoformat()
+        withdrawal.metadata_json = json.dumps(metadata)
+        
+        db.commit()
+        return {"status": "ok", "message": "Webhook processado"}
+    except Exception as e:
+        print(f"[WEBHOOK GATEBOX CASH-OUT] Erro: {str(e)}")
+        return {"status": "error", "message": str(e)}
 
 
 # ========== IGameWin Seamless Mode - gold_api (Site Endpoint) ==========
