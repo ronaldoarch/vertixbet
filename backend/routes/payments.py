@@ -310,12 +310,15 @@ async def create_pix_deposit(
                 print(f"[DEPOSIT PIX] Erro ao gerar QR Code: {str(e)}")
                 qr_code_base64 = None
         
+        # Salvar identifier do Gatebox no metadata para referência
+        gatebox_identifier = gatebox_data.get("identifier")
         metadata = {
             "pix_code": qr_code,
             "pix_qr_code_base64": qr_code_base64,
             "transaction_id": transaction_id,
-            "identifier": gatebox_data.get("identifier"),
-            "external_id": external_id,
+            "identifier": gatebox_identifier,
+            "external_id": external_id,  # externalId original que enviamos
+            "gatebox_identifier": gatebox_identifier,  # identifier retornado pelo Gatebox
             "gatebox_response": pix_response
         }
     else:
@@ -362,10 +365,12 @@ async def create_pix_deposit(
         metadata["coupon_code"] = request.coupon_code.strip().upper()
         metadata["bonus_amount"] = bonus_amount
     
-    # External ID: Gatebox usa identifier/transactionId dentro de data, SuitPay usa idTransaction ou request_number
+    # External ID: Gatebox retorna identifier, mas devemos usar o externalId original que enviamos
+    # O webhook do Gatebox envia o externalId original (DEP_11_...), não o identifier (QR...)
     if gateway.type == "gatebox":
-        gatebox_data = pix_response.get("data") if pix_response.get("data") else pix_response
-        external_id_for_deposit = gatebox_data.get("identifier") or gatebox_data.get("transactionId") or gatebox_data.get("externalId") or external_id
+        # Usar o externalId original que enviamos (DEP_11_...)
+        # O identifier (QR...) está salvo no metadata
+        external_id_for_deposit = external_id  # Manter o externalId original (DEP_11_...)
     else:
         external_id_for_deposit = pix_response.get("idTransaction") or external_id
     deposit = Deposit(
@@ -1030,16 +1035,37 @@ async def webhook_gatebox(request: Request, db: Session = Depends(get_db)):
 
 async def _process_gatebox_deposit(db: Session, external_id: str, transaction_id: str, identifier: str, status_val: str, amount: float, data: dict):
     """Processa webhook de depósito PIX do Gatebox"""
-    # Buscar depósito
+    # Buscar depósito pelo externalId original (DEP_11_...)
     deposit = None
     if external_id:
         deposit = db.query(Deposit).filter(Deposit.external_id == external_id).first()
+    
+    # Se não encontrou, tentar buscar pelo identifier (QR...) que pode estar no metadata
     if not deposit and identifier:
-        deposit = db.query(Deposit).filter(Deposit.external_id == identifier).first()
+        # Buscar depósitos pendentes recentes e verificar metadata
+        from datetime import timedelta
+        time_threshold = datetime.utcnow() - timedelta(hours=24)
+        pending_deposits = db.query(Deposit).filter(
+            Deposit.status == TransactionStatus.PENDING,
+            Deposit.created_at >= time_threshold
+        ).all()
+        for d in pending_deposits:
+            try:
+                meta = json.loads(d.metadata_json) if d.metadata_json else {}
+                gatebox_resp = meta.get("gatebox_response", {})
+                gatebox_data = gatebox_resp.get("data") if gatebox_resp.get("data") else gatebox_resp
+                if gatebox_data.get("identifier") == identifier or gatebox_data.get("identifier") == identifier:
+                    deposit = d
+                    print(f"[WEBHOOK GATEBOX] Depósito encontrado por identifier no metadata: {d.id}")
+                    break
+            except:
+                pass
+    
     if not deposit and transaction_id:
         deposit = db.query(Deposit).filter(Deposit.external_id == transaction_id).first()
     
     if not deposit:
+        print(f"[WEBHOOK GATEBOX] Depósito não encontrado - External ID: {external_id}, Identifier: {identifier}, Transaction ID: {transaction_id}")
         return {"status": "ok", "message": "Depósito não encontrado"}
     
     # Atualizar status
