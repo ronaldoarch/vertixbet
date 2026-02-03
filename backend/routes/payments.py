@@ -480,9 +480,24 @@ async def create_pix_withdrawal(
                 if not doc_validation:
                     doc_validation = user.cpf or ""
             
+            # Formatar chave PIX conforme o tipo
+            pix_key_formatted = request.pix_key
+            if request.pix_key_type == "phoneNumber":
+                # Gatebox requer telefone no formato +5514987654321
+                formatted_phone = _format_phone_for_gatebox(request.pix_key)
+                if formatted_phone:
+                    pix_key_formatted = formatted_phone
+                    print(f"[WITHDRAWAL PIX] Telefone formatado: {request.pix_key} -> {pix_key_formatted}")
+                else:
+                    print(f"[WITHDRAWAL PIX] AVISO: Não foi possível formatar telefone {request.pix_key} para formato Gatebox")
+            elif request.pix_key_type == "document":
+                # Remover formatação (pontos, traços, barras) de CPF/CNPJ
+                pix_key_formatted = "".join(c for c in request.pix_key if c.isdigit())
+            
             print(f"[WITHDRAWAL PIX] Dados para Gatebox:")
             print(f"  - External ID: {external_id}")
-            print(f"  - Chave PIX: {request.pix_key} (tipo: {request.pix_key_type})")
+            print(f"  - Chave PIX original: {request.pix_key} (tipo: {request.pix_key_type})")
+            print(f"  - Chave PIX formatada: {pix_key_formatted}")
             print(f"  - Nome: {payer_name}")
             print(f"  - Valor: R$ {request.amount:.2f}")
             print(f"  - Documento: {doc_validation if doc_validation else '(não fornecido)'}")
@@ -490,7 +505,7 @@ async def create_pix_withdrawal(
             try:
                 pix_response = await gatebox.withdraw_pix(
                     external_id=external_id,
-                    key=request.pix_key,
+                    key=pix_key_formatted,  # Usar chave formatada
                     name=payer_name,
                     amount=request.amount,
                     document_number=doc_validation if doc_validation else None,
