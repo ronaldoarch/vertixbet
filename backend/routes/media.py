@@ -16,7 +16,20 @@ router = APIRouter(prefix="/api/admin/media", tags=["media"])
 public_router = APIRouter(prefix="/api/public/media", tags=["public-media"])
 
 # Configuração de uploads
-UPLOAD_BASE_DIR = Path("uploads")
+# Usar caminho absoluto baseado em /app (container) ou diretório atual (desenvolvimento)
+# Verificar se estamos em container (caminho /app existe) ou usar caminho relativo
+if Path("/app").exists():
+    UPLOAD_BASE_DIR = Path("/app/uploads")
+else:
+    # Desenvolvimento local - usar caminho absoluto baseado no diretório atual
+    import os
+    current_dir = Path(os.getcwd())
+    # Se estamos em /backend, usar uploads relativo; senão, usar /app/uploads como fallback
+    if (current_dir / "uploads").exists():
+        UPLOAD_BASE_DIR = current_dir / "uploads"
+    else:
+        UPLOAD_BASE_DIR = Path("uploads")
+
 UPLOAD_DIRS = {
     MediaType.LOGO: UPLOAD_BASE_DIR / "logos",
     MediaType.BANNER: UPLOAD_BASE_DIR / "banners",
@@ -25,6 +38,12 @@ UPLOAD_DIRS = {
 # Criar diretórios se não existirem
 for upload_dir in UPLOAD_DIRS.values():
     upload_dir.mkdir(parents=True, exist_ok=True)
+
+# Log para debug (apenas em desenvolvimento)
+import logging
+logger = logging.getLogger(__name__)
+logger.info(f"UPLOAD_BASE_DIR configurado como: {UPLOAD_BASE_DIR.absolute()}")
+logger.info(f"Diretórios de upload: {[str(d.absolute()) for d in UPLOAD_DIRS.values()]}")
 
 # Tipos de arquivo permitidos
 ALLOWED_MIME_TYPES = {
@@ -307,12 +326,40 @@ async def serve_uploaded_file(media_type: str, filename: str):
     upload_dir = dir_mapping.get(media_type.lower(), media_type)
     file_path = UPLOAD_BASE_DIR / upload_dir / filename
     
+    # Log para debug
+    logger.debug(f"Tentando servir arquivo: {file_path.absolute()}")
+    logger.debug(f"Arquivo existe: {file_path.exists()}")
+    
     if not file_path.exists():
-        raise HTTPException(status_code=404, detail=f"Arquivo não encontrado: {file_path}")
+        # Verificar se o diretório existe
+        dir_path = UPLOAD_BASE_DIR / upload_dir
+        logger.warning(f"Arquivo não encontrado: {file_path.absolute()}")
+        logger.warning(f"Diretório existe: {dir_path.exists()}")
+        if dir_path.exists():
+            # Listar arquivos no diretório para debug
+            try:
+                files = list(dir_path.iterdir())
+                logger.warning(f"Arquivos no diretório: {[f.name for f in files]}")
+            except Exception as e:
+                logger.error(f"Erro ao listar diretório: {e}")
+        raise HTTPException(status_code=404, detail=f"Arquivo não encontrado: {file_path.absolute()}")
+
+    # Detectar tipo MIME baseado na extensão
+    ext = file_path.suffix.lower()
+    mime_map = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".gif": "image/gif",
+        ".svg": "image/svg+xml",
+    }
+    mime_type = mime_map.get(ext, "image/jpeg")
 
     return FileResponse(
         file_path,
-        media_type="image/jpeg"  # FastAPI vai detectar automaticamente
+        media_type=mime_type,
+        filename=filename
     )
 
 
@@ -329,18 +376,37 @@ async def serve_uploaded_file_fallback(filename: str, db: Session = Depends(get_
         file_path = UPLOAD_BASE_DIR / upload_dir / filename
     else:
         # Tentar em ambos os diretórios (fallback)
+        file_path = None
         for upload_dir in ["logos", "banners"]:
-            file_path = UPLOAD_BASE_DIR / upload_dir / filename
-            if file_path.exists():
+            test_path = UPLOAD_BASE_DIR / upload_dir / filename
+            if test_path.exists():
+                file_path = test_path
                 break
-        else:
-            # Não encontrou em nenhum lugar
+        
+        if not file_path:
             raise HTTPException(status_code=404, detail=f"Arquivo não encontrado: {filename}")
     
     if not file_path.exists():
         raise HTTPException(status_code=404, detail=f"Arquivo não encontrado: {file_path}")
 
+    # Detectar tipo MIME baseado na extensão ou usar o mime_type do banco se disponível
+    mime_type = None
+    if asset and asset.mime_type:
+        mime_type = asset.mime_type
+    else:
+        ext = file_path.suffix.lower()
+        mime_map = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".webp": "image/webp",
+            ".gif": "image/gif",
+            ".svg": "image/svg+xml",
+        }
+        mime_type = mime_map.get(ext, "image/jpeg")
+
     return FileResponse(
         file_path,
-        media_type="image/jpeg"  # FastAPI vai detectar automaticamente
+        media_type=mime_type,
+        filename=filename
     )
