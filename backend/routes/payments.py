@@ -1141,8 +1141,8 @@ async def _process_gatebox_deposit(db: Session, external_id: str, transaction_id
                                 aff.total_cpa_earned = (aff.total_cpa_earned or 0) + cpa_to_credit
                             if (aff.revshare_percentage or 0) > 0:
                                 revshare_to_credit = round(deposit.amount * (aff.revshare_percentage / 100.0), 2)
-                                    aff.total_revshare_earned = (aff.total_revshare_earned or 0) + revshare_to_credit
-                                    aff_user.balance = (aff_user.balance or 0) + revshare_to_credit
+                                aff.total_revshare_earned = (aff.total_revshare_earned or 0) + revshare_to_credit
+                                aff_user.balance = (aff_user.balance or 0) + revshare_to_credit
             deposit.status = TransactionStatus.APPROVED
             
             # Criar notificação de confirmação de depósito
