@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from database import get_db
 from sqlalchemy import func
-from models import User, Deposit, Withdrawal, Gateway, TransactionStatus, Bet, BetStatus, Affiliate, FTDSettings, FTD, Coupon, CouponType, SiteSettings, Promotion, IGameWinAgent
+from models import User, Deposit, Withdrawal, Gateway, TransactionStatus, Bet, BetStatus, Affiliate, FTDSettings, FTD, Coupon, CouponType, SiteSettings, Promotion, IGameWinAgent, Notification, NotificationType
 from suitpay_api import SuitPayAPI
 from gatebox_api import GateboxAPI, get_gatebox_client
 from schemas import DepositResponse, WithdrawalResponse, DepositPixRequest, WithdrawalPixRequest, AffiliateResponse
@@ -797,6 +797,25 @@ async def webhook_pix_cashin(request: Request, db: Session = Depends(get_db)):
                                 aff_user.balance = (aff_user.balance or 0) + total_aff
                                 print(f"[AFFILIATE] Total creditado: R$ {total_aff} (saldo afiliado: {aff_user.balance})")
                 deposit.status = TransactionStatus.APPROVED
+                
+                # Criar notificação de confirmação de depósito
+                if user:
+                    bonus_text = ""
+                    if bonus_to_credit > 0:
+                        bonus_text = f" Você também recebeu R$ {bonus_to_credit:.2f} de bônus!".replace(".", ",")
+                    
+                    notification = Notification(
+                        title="Depósito Confirmado! 🎉",
+                        message=f"Seu depósito de R$ {deposit.amount:.2f} foi confirmado com sucesso.{bonus_text}".replace(".", ","),
+                        type=NotificationType.SUCCESS,
+                        user_id=user.id,
+                        is_read=False,
+                        is_active=True,
+                        link="/depositar"
+                    )
+                    db.add(notification)
+                    print(f"[WEBHOOK SUITPAY] Notificação de confirmação criada para usuário {user.id}")
+                
                 print(f"Depósito {deposit.id} aprovado com sucesso")
             else:
                 print(f"Depósito {deposit.id} já estava aprovado, ignorando webhook duplicado")
@@ -1122,9 +1141,28 @@ async def _process_gatebox_deposit(db: Session, external_id: str, transaction_id
                                 aff.total_cpa_earned = (aff.total_cpa_earned or 0) + cpa_to_credit
                             if (aff.revshare_percentage or 0) > 0:
                                 revshare_to_credit = round(deposit.amount * (aff.revshare_percentage / 100.0), 2)
-                                aff.total_revshare_earned = (aff.total_revshare_earned or 0) + revshare_to_credit
-                                aff_user.balance = (aff_user.balance or 0) + revshare_to_credit
+                                    aff.total_revshare_earned = (aff.total_revshare_earned or 0) + revshare_to_credit
+                                    aff_user.balance = (aff_user.balance or 0) + revshare_to_credit
             deposit.status = TransactionStatus.APPROVED
+            
+            # Criar notificação de confirmação de depósito
+            if user:
+                bonus_text = ""
+                if bonus_to_credit > 0:
+                    bonus_text = f" Você também recebeu R$ {bonus_to_credit:.2f} de bônus!".replace(".", ",")
+                
+                notification = Notification(
+                    title="Depósito Confirmado! 🎉",
+                    message=f"Seu depósito de R$ {deposit.amount:.2f} foi confirmado com sucesso.{bonus_text}".replace(".", ","),
+                    type=NotificationType.SUCCESS,
+                    user_id=user.id,
+                    is_read=False,
+                    is_active=True,
+                    link="/depositar"
+                )
+                db.add(notification)
+                print(f"[WEBHOOK GATEBOX] Notificação de confirmação criada para usuário {user.id}")
+            
             db.commit()
     
     return {"status": "ok", "message": "Depósito processado"}
