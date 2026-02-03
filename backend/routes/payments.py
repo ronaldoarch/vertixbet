@@ -257,18 +257,34 @@ async def create_pix_deposit(
                 detail=f"Erro ao gerar código PIX no Gatebox. {gatebox.last_error or 'Erro desconhecido'}"
             )
         
-        # Gatebox retorna campos diferentes - verificar estrutura da resposta
-        qr_code = pix_response.get("qrCode") or pix_response.get("emvqrcps") or pix_response.get("qrcode")
+        # Gatebox retorna resposta no formato: { "statusCode": 200, "data": { "key": "...", ... } }
+        # Ou pode retornar diretamente os dados em alguns casos
+        gatebox_data = pix_response.get("data") if pix_response.get("data") else pix_response
+        status_code = pix_response.get("statusCode")
+        
+        # Verificar se a resposta indica sucesso
+        if status_code and status_code != 200:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Gatebox retornou erro. Status: {status_code}, Resposta: {pix_response}"
+            )
+        
+        # Gatebox retorna o QR Code no campo "key" dentro de "data"
+        qr_code = gatebox_data.get("key") or gatebox_data.get("qrCode") or gatebox_data.get("emvqrcps") or gatebox_data.get("qrcode")
         if not qr_code:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f"Resposta inválida do Gatebox. QR Code não encontrado. Resposta: {pix_response}"
             )
         
+        # Extrair transaction_id e identifier
+        transaction_id = gatebox_data.get("transactionId") or gatebox_data.get("identifier") or gatebox_data.get("transaction_id")
+        
         metadata = {
             "pix_code": qr_code,
-            "pix_qr_code_base64": pix_response.get("qrCodeBase64") or pix_response.get("qrcodeBase64"),
-            "transaction_id": pix_response.get("transactionId") or pix_response.get("transaction_id"),
+            "pix_qr_code_base64": gatebox_data.get("qrCodeBase64") or gatebox_data.get("qrcodeBase64"),
+            "transaction_id": transaction_id,
+            "identifier": gatebox_data.get("identifier"),
             "external_id": external_id,
             "gatebox_response": pix_response
         }
@@ -316,8 +332,12 @@ async def create_pix_deposit(
         metadata["coupon_code"] = request.coupon_code.strip().upper()
         metadata["bonus_amount"] = bonus_amount
     
-    # External ID: Gatebox usa transactionId, SuitPay usa idTransaction ou request_number
-    external_id_for_deposit = pix_response.get("transactionId") or pix_response.get("idTransaction") or external_id
+    # External ID: Gatebox usa identifier/transactionId dentro de data, SuitPay usa idTransaction ou request_number
+    if gateway.type == "gatebox":
+        gatebox_data = pix_response.get("data") if pix_response.get("data") else pix_response
+        external_id_for_deposit = gatebox_data.get("identifier") or gatebox_data.get("transactionId") or gatebox_data.get("externalId") or external_id
+    else:
+        external_id_for_deposit = pix_response.get("idTransaction") or external_id
     deposit = Deposit(
         user_id=user.id,
         gateway_id=gateway.id,
