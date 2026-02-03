@@ -967,41 +967,58 @@ async def webhook_gatebox(request: Request, db: Session = Depends(get_db)):
         # Gatebox pode enviar dados diretamente ou dentro de um objeto
         webhook_data = data.get("data") if data.get("data") else data
         
-        # Identificar tipo de webhook
-        webhook_type = webhook_data.get("type") or data.get("type") or ""
-        external_id = webhook_data.get("externalId") or webhook_data.get("external_id") or data.get("externalId")
-        transaction_id = webhook_data.get("transactionId") or webhook_data.get("transaction_id") or data.get("transactionId")
-        identifier = webhook_data.get("identifier") or data.get("identifier")
-        status_val = webhook_data.get("status") or webhook_data.get("statusTransaction") or data.get("status")
-        amount = webhook_data.get("amount") or webhook_data.get("value") or data.get("amount")
+        # Identificar tipo de webhook - Gatebox usa "event" no nível raiz
+        webhook_type = data.get("event") or webhook_data.get("event") or webhook_data.get("type") or data.get("type") or ""
         
-        print(f"[WEBHOOK GATEBOX] Tipo: {webhook_type}, External ID: {external_id}, Status: {status_val}")
+        # External ID pode estar em invoice.externalId ou transaction.externalId
+        invoice_data = data.get("invoice") or {}
+        transaction_data = data.get("transaction") or {}
+        external_id = (
+            transaction_data.get("externalId") or 
+            invoice_data.get("externalId") or 
+            webhook_data.get("externalId") or 
+            webhook_data.get("external_id") or 
+            data.get("externalId")
+        )
+        
+        transaction_id = (
+            transaction_data.get("transactionId") or 
+            webhook_data.get("transactionId") or 
+            webhook_data.get("transaction_id") or 
+            data.get("transactionId")
+        )
+        
+        identifier = webhook_data.get("identifier") or data.get("identifier")
+        status_val = data.get("status") or webhook_data.get("status") or webhook_data.get("statusTransaction")
+        amount = transaction_data.get("amount") or webhook_data.get("amount") or webhook_data.get("value") or data.get("amount")
+        
+        print(f"[WEBHOOK GATEBOX] Event: {webhook_type}, External ID: {external_id}, Status: {status_val}, Amount: {amount}")
         
         # Processar conforme o tipo
-        if webhook_type == "PIX_PAY_IN" or (not webhook_type and external_id and external_id.startswith("DEP_")):
+        if webhook_type == "PIX_PAY_IN":
             # Depósito PIX
-            return await _process_gatebox_deposit(db, external_id, transaction_id, identifier, status_val, amount, webhook_data or data)
-        elif webhook_type == "PIX_PAY_OUT" or (not webhook_type and external_id and external_id.startswith("WTH_")):
+            return await _process_gatebox_deposit(db, external_id, transaction_id, identifier, status_val, amount, data)
+        elif webhook_type == "PIX_PAY_OUT":
             # Saque PIX
-            return await _process_gatebox_withdrawal(db, external_id, transaction_id, identifier, status_val, webhook_data or data)
+            return await _process_gatebox_withdrawal(db, external_id, transaction_id, identifier, status_val, data)
         elif webhook_type == "PIX_REVERSAL":
             # Estorno de depósito (chargeback)
-            return await _process_gatebox_reversal(db, external_id, transaction_id, identifier, status_val, amount, webhook_data or data)
+            return await _process_gatebox_reversal(db, external_id, transaction_id, identifier, status_val, amount, data)
         elif webhook_type == "PIX_REVERSAL_OUT":
             # Estorno de saque
-            return await _process_gatebox_reversal_out(db, external_id, transaction_id, identifier, status_val, webhook_data or data)
+            return await _process_gatebox_reversal_out(db, external_id, transaction_id, identifier, status_val, data)
         elif webhook_type == "PIX_REFUND":
             # Reembolso
-            return await _process_gatebox_refund(db, external_id, transaction_id, identifier, status_val, webhook_data or data)
+            return await _process_gatebox_refund(db, external_id, transaction_id, identifier, status_val, data)
         else:
-            # Tentar identificar automaticamente pelo external_id
+            # Tentar identificar automaticamente pelo external_id se não tiver event
             if external_id:
                 if external_id.startswith("DEP_"):
-                    return await _process_gatebox_deposit(db, external_id, transaction_id, identifier, status_val, amount, webhook_data or data)
+                    return await _process_gatebox_deposit(db, external_id, transaction_id, identifier, status_val, amount, data)
                 elif external_id.startswith("WTH_"):
-                    return await _process_gatebox_withdrawal(db, external_id, transaction_id, identifier, status_val, webhook_data or data)
+                    return await _process_gatebox_withdrawal(db, external_id, transaction_id, identifier, status_val, data)
             
-            print(f"[WEBHOOK GATEBOX] Tipo não reconhecido: {webhook_type}, dados: {data}")
+            print(f"[WEBHOOK GATEBOX] Tipo não reconhecido: {webhook_type}, event: {data.get('event')}, dados: {data}")
             return {"status": "ok", "message": f"Tipo de webhook não reconhecido: {webhook_type}"}
     
     except Exception as e:
