@@ -239,7 +239,7 @@ async def create_pix_deposit(
                 detail="Erro ao criar cliente Gatebox. Verifique as credenciais."
             )
         
-        callback_url = f"{webhook_url}/api/webhooks/gatebox/pix-cashin"
+        callback_url = f"{webhook_url}/api/webhooks/gatebox"
         print(f"[DEPOSIT PIX] Webhook URL: {callback_url}")
         
         # Gatebox requer telefone no formato +5514987654321 (código país + DDD + número)
@@ -926,27 +926,34 @@ async def webhook_pix_cashout(request: Request, db: Session = Depends(get_db)):
 
 
 # ========== GATEBOX WEBHOOKS ==========
-@webhook_router.get("/gatebox/pix-cashin")
-async def webhook_gatebox_cashin_info():
-    """Informações sobre o webhook de Cash-in do Gatebox"""
+@webhook_router.get("/gatebox")
+async def webhook_gatebox_info():
+    """Informações sobre os webhooks do Gatebox"""
+    webhook_url = os.getenv("WEBHOOK_BASE_URL", "https://api.vertixbet.site")
     return {
         "status": "ok",
         "message": "Webhook endpoint está acessível",
-        "endpoint": "/api/webhooks/gatebox/pix-cashin",
+        "endpoint": f"{webhook_url}/api/webhooks/gatebox",
         "method": "POST",
-        "note": "Gatebox pode não ter webhook automático. Use polling via /api/webhooks/gatebox/check-status",
+        "supported_types": [
+            "PIX_PAY_IN",      # Depósito PIX
+            "PIX_PAY_OUT",     # Saque PIX
+            "PIX_REVERSAL",    # Estorno de depósito
+            "PIX_REVERSAL_OUT", # Estorno de saque
+            "PIX_REFUND"       # Reembolso
+        ],
         "timestamp": datetime.utcnow().isoformat()
     }
 
-@webhook_router.post("/gatebox/pix-cashin")
-async def webhook_gatebox_cashin(request: Request, db: Session = Depends(get_db)):
+@webhook_router.post("/gatebox")
+async def webhook_gatebox(request: Request, db: Session = Depends(get_db)):
     """
-    Webhook para receber notificações de PIX Cash-in (depósitos) do Gatebox
-    Nota: Gatebox pode não ter webhook automático - use polling via check-status se necessário
+    Webhook unificado para receber notificações do Gatebox
+    Suporta: PIX_PAY_IN, PIX_PAY_OUT, PIX_REVERSAL, PIX_REVERSAL_OUT, PIX_REFUND
     """
     try:
         data = await request.json()
-        print(f"[WEBHOOK GATEBOX CASH-IN] Dados recebidos: {json.dumps(data, indent=2)}")
+        print(f"[WEBHOOK GATEBOX] Dados recebidos: {json.dumps(data, indent=2)}")
         
         # Buscar gateway Gatebox ativo
         gateway = db.query(Gateway).filter(
@@ -957,87 +964,285 @@ async def webhook_gatebox_cashin(request: Request, db: Session = Depends(get_db)
         if not gateway:
             return {"status": "ok", "message": "Gateway Gatebox não encontrado"}
         
-        # Processar webhook - estrutura depende do que Gatebox enviar
-        transaction_id = data.get("transactionId") or data.get("transaction_id")
-        external_id = data.get("externalId") or data.get("external_id")
-        status_val = data.get("status") or data.get("statusTransaction")
-        amount = data.get("amount") or data.get("value")
+        # Gatebox pode enviar dados diretamente ou dentro de um objeto
+        webhook_data = data.get("data") if data.get("data") else data
         
-        # Buscar depósito
-        deposit = None
-        if external_id:
-            deposit = db.query(Deposit).filter(Deposit.external_id == external_id).first()
-        if not deposit and transaction_id:
-            deposit = db.query(Deposit).filter(Deposit.external_id == transaction_id).first()
+        # Identificar tipo de webhook
+        webhook_type = webhook_data.get("type") or data.get("type") or ""
+        external_id = webhook_data.get("externalId") or webhook_data.get("external_id") or data.get("externalId")
+        transaction_id = webhook_data.get("transactionId") or webhook_data.get("transaction_id") or data.get("transactionId")
+        identifier = webhook_data.get("identifier") or data.get("identifier")
+        status_val = webhook_data.get("status") or webhook_data.get("statusTransaction") or data.get("status")
+        amount = webhook_data.get("amount") or webhook_data.get("value") or data.get("amount")
         
-        if not deposit:
-            return {"status": "ok", "message": "Depósito não encontrado"}
+        print(f"[WEBHOOK GATEBOX] Tipo: {webhook_type}, External ID: {external_id}, Status: {status_val}")
         
-        # Atualizar status
-        status_upper = str(status_val).upper() if status_val else ""
-        if status_upper in ["PAID", "COMPLETED", "SUCCESS", "CONFIRMED", "APPROVED"]:
-            if deposit.status != TransactionStatus.APPROVED:
-                # Mesma lógica do SuitPay para aprovar depósito
-                user = db.query(User).filter(User.id == deposit.user_id).first()
-                bonus_to_credit = 0.0
-                dep_meta = json.loads(deposit.metadata_json) if deposit.metadata_json else {}
-                if dep_meta.get("coupon_id") and dep_meta.get("bonus_amount"):
-                    bonus_to_credit = float(dep_meta["bonus_amount"])
-                    coupon = db.query(Coupon).filter(Coupon.id == dep_meta["coupon_id"]).first()
-                    if coupon:
-                        coupon.used_count = (coupon.used_count or 0) + 1
-                is_first_deposit = db.query(FTD).filter(FTD.user_id == deposit.user_id).first() is None
-                ftd_bonus = 0.0
-                reload_bonus = 0.0
-                ftd_settings = db.query(FTDSettings).filter(FTDSettings.is_active == True).first()
-                if user and is_first_deposit:
-                    ftd_pct = getattr(ftd_settings, "ftd_bonus_percentage", 0.0) or 0.0
-                    if ftd_pct > 0:
-                        ftd_bonus = round(deposit.amount * (ftd_pct / 100.0), 2)
-                        bonus_to_credit += ftd_bonus
-                    pass_rate = getattr(ftd_settings, "pass_rate", 0.0) if ftd_settings else 0.0
-                    ftd = FTD(
-                        user_id=deposit.user_id,
-                        deposit_id=deposit.id,
-                        amount=deposit.amount,
-                        is_first_deposit=True,
-                        pass_rate=pass_rate,
-                        status=TransactionStatus.APPROVED
-                    )
-                    db.add(ftd)
-                elif user and ftd_settings:
-                    reload_pct = getattr(ftd_settings, "reload_bonus_percentage", 0.0) or 0.0
-                    reload_min = getattr(ftd_settings, "reload_bonus_min_deposit", 0.0) or 0.0
-                    if reload_pct > 0 and deposit.amount >= reload_min:
-                        reload_bonus = round(deposit.amount * (reload_pct / 100.0), 2)
-                        bonus_to_credit += reload_bonus
-                if user:
-                    bonus_bal = getattr(user, "bonus_balance", 0.0) or 0.0
-                    user.balance += deposit.amount
-                    user.bonus_balance = bonus_bal + bonus_to_credit
-                    dep_meta["total_bonus_credited"] = bonus_to_credit
-                    deposit.metadata_json = json.dumps(dep_meta)
-                    if user.referred_by_affiliate_id:
-                        aff = db.query(Affiliate).filter(Affiliate.id == user.referred_by_affiliate_id).first()
-                        if aff and aff.is_active:
-                            aff_user = db.query(User).filter(User.id == aff.user_id).first()
-                            if aff_user:
-                                if is_first_deposit and (aff.cpa_amount or 0) > 0:
-                                    cpa_to_credit = float(aff.cpa_amount)
-                                    aff.total_cpa_earned = (aff.total_cpa_earned or 0) + cpa_to_credit
-                                if (aff.revshare_percentage or 0) > 0:
-                                    revshare_to_credit = round(deposit.amount * (aff.revshare_percentage / 100.0), 2)
-                                    aff.total_revshare_earned = (aff.total_revshare_earned or 0) + revshare_to_credit
-                                    aff_user.balance = (aff_user.balance or 0) + revshare_to_credit
-                deposit.status = TransactionStatus.APPROVED
-                db.commit()
-        
-        return {"status": "ok", "message": "Webhook processado"}
+        # Processar conforme o tipo
+        if webhook_type == "PIX_PAY_IN" or (not webhook_type and external_id and external_id.startswith("DEP_")):
+            # Depósito PIX
+            return await _process_gatebox_deposit(db, external_id, transaction_id, identifier, status_val, amount, webhook_data or data)
+        elif webhook_type == "PIX_PAY_OUT" or (not webhook_type and external_id and external_id.startswith("WTH_")):
+            # Saque PIX
+            return await _process_gatebox_withdrawal(db, external_id, transaction_id, identifier, status_val, webhook_data or data)
+        elif webhook_type == "PIX_REVERSAL":
+            # Estorno de depósito (chargeback)
+            return await _process_gatebox_reversal(db, external_id, transaction_id, identifier, status_val, amount, webhook_data or data)
+        elif webhook_type == "PIX_REVERSAL_OUT":
+            # Estorno de saque
+            return await _process_gatebox_reversal_out(db, external_id, transaction_id, identifier, status_val, webhook_data or data)
+        elif webhook_type == "PIX_REFUND":
+            # Reembolso
+            return await _process_gatebox_refund(db, external_id, transaction_id, identifier, status_val, webhook_data or data)
+        else:
+            # Tentar identificar automaticamente pelo external_id
+            if external_id:
+                if external_id.startswith("DEP_"):
+                    return await _process_gatebox_deposit(db, external_id, transaction_id, identifier, status_val, amount, webhook_data or data)
+                elif external_id.startswith("WTH_"):
+                    return await _process_gatebox_withdrawal(db, external_id, transaction_id, identifier, status_val, webhook_data or data)
+            
+            print(f"[WEBHOOK GATEBOX] Tipo não reconhecido: {webhook_type}, dados: {data}")
+            return {"status": "ok", "message": f"Tipo de webhook não reconhecido: {webhook_type}"}
+    
     except Exception as e:
-        print(f"[WEBHOOK GATEBOX CASH-IN] Erro: {str(e)}")
+        print(f"[WEBHOOK GATEBOX] Erro: {str(e)}")
         import traceback
         traceback.print_exc()
         return {"status": "error", "message": str(e)}
+
+
+async def _process_gatebox_deposit(db: Session, external_id: str, transaction_id: str, identifier: str, status_val: str, amount: float, data: dict):
+    """Processa webhook de depósito PIX do Gatebox"""
+    # Buscar depósito
+    deposit = None
+    if external_id:
+        deposit = db.query(Deposit).filter(Deposit.external_id == external_id).first()
+    if not deposit and identifier:
+        deposit = db.query(Deposit).filter(Deposit.external_id == identifier).first()
+    if not deposit and transaction_id:
+        deposit = db.query(Deposit).filter(Deposit.external_id == transaction_id).first()
+    
+    if not deposit:
+        return {"status": "ok", "message": "Depósito não encontrado"}
+    
+    # Atualizar status
+    status_upper = str(status_val).upper() if status_val else ""
+    if status_upper in ["PAID", "COMPLETED", "SUCCESS", "CONFIRMED", "APPROVED", "CREATED"]:
+        if deposit.status != TransactionStatus.APPROVED:
+            # Mesma lógica do SuitPay para aprovar depósito
+            user = db.query(User).filter(User.id == deposit.user_id).first()
+            bonus_to_credit = 0.0
+            dep_meta = json.loads(deposit.metadata_json) if deposit.metadata_json else {}
+            if dep_meta.get("coupon_id") and dep_meta.get("bonus_amount"):
+                bonus_to_credit = float(dep_meta["bonus_amount"])
+                coupon = db.query(Coupon).filter(Coupon.id == dep_meta["coupon_id"]).first()
+                if coupon:
+                    coupon.used_count = (coupon.used_count or 0) + 1
+            is_first_deposit = db.query(FTD).filter(FTD.user_id == deposit.user_id).first() is None
+            ftd_bonus = 0.0
+            reload_bonus = 0.0
+            ftd_settings = db.query(FTDSettings).filter(FTDSettings.is_active == True).first()
+            if user and is_first_deposit:
+                ftd_pct = getattr(ftd_settings, "ftd_bonus_percentage", 0.0) or 0.0
+                if ftd_pct > 0:
+                    ftd_bonus = round(deposit.amount * (ftd_pct / 100.0), 2)
+                    bonus_to_credit += ftd_bonus
+                pass_rate = getattr(ftd_settings, "pass_rate", 0.0) if ftd_settings else 0.0
+                ftd = FTD(
+                    user_id=deposit.user_id,
+                    deposit_id=deposit.id,
+                    amount=deposit.amount,
+                    is_first_deposit=True,
+                    pass_rate=pass_rate,
+                    status=TransactionStatus.APPROVED
+                )
+                db.add(ftd)
+            elif user and ftd_settings:
+                reload_pct = getattr(ftd_settings, "reload_bonus_percentage", 0.0) or 0.0
+                reload_min = getattr(ftd_settings, "reload_bonus_min_deposit", 0.0) or 0.0
+                if reload_pct > 0 and deposit.amount >= reload_min:
+                    reload_bonus = round(deposit.amount * (reload_pct / 100.0), 2)
+                    bonus_to_credit += reload_bonus
+            if user:
+                bonus_bal = getattr(user, "bonus_balance", 0.0) or 0.0
+                user.balance += deposit.amount
+                user.bonus_balance = bonus_bal + bonus_to_credit
+                dep_meta["total_bonus_credited"] = bonus_to_credit
+                deposit.metadata_json = json.dumps(dep_meta)
+                if user.referred_by_affiliate_id:
+                    aff = db.query(Affiliate).filter(Affiliate.id == user.referred_by_affiliate_id).first()
+                    if aff and aff.is_active:
+                        aff_user = db.query(User).filter(User.id == aff.user_id).first()
+                        if aff_user:
+                            if is_first_deposit and (aff.cpa_amount or 0) > 0:
+                                cpa_to_credit = float(aff.cpa_amount)
+                                aff.total_cpa_earned = (aff.total_cpa_earned or 0) + cpa_to_credit
+                            if (aff.revshare_percentage or 0) > 0:
+                                revshare_to_credit = round(deposit.amount * (aff.revshare_percentage / 100.0), 2)
+                                aff.total_revshare_earned = (aff.total_revshare_earned or 0) + revshare_to_credit
+                                aff_user.balance = (aff_user.balance or 0) + revshare_to_credit
+            deposit.status = TransactionStatus.APPROVED
+            db.commit()
+    
+    return {"status": "ok", "message": "Depósito processado"}
+
+
+async def _process_gatebox_withdrawal(db: Session, external_id: str, transaction_id: str, identifier: str, status_val: str, data: dict):
+    """Processa webhook de saque PIX do Gatebox"""
+    withdrawal = None
+    if external_id:
+        withdrawal = db.query(Withdrawal).filter(Withdrawal.external_id == external_id).first()
+    if not withdrawal and identifier:
+        withdrawal = db.query(Withdrawal).filter(Withdrawal.external_id == identifier).first()
+    if not withdrawal and transaction_id:
+        withdrawal = db.query(Withdrawal).filter(Withdrawal.external_id == transaction_id).first()
+    
+    if not withdrawal:
+        return {"status": "ok", "message": "Saque não encontrado"}
+    
+    status_upper = str(status_val).upper() if status_val else ""
+    if status_upper in ["PAID", "COMPLETED", "SUCCESS", "CONFIRMED", "APPROVED"]:
+        withdrawal.status = TransactionStatus.APPROVED
+    elif status_upper in ["CANCELED", "CANCELLED", "FAILED", "ERROR"]:
+        if withdrawal.status == TransactionStatus.PENDING:
+            user = db.query(User).filter(User.id == withdrawal.user_id).first()
+            if user:
+                user.balance += withdrawal.amount
+        withdrawal.status = TransactionStatus.CANCELLED
+    
+    metadata = json.loads(withdrawal.metadata_json) if withdrawal.metadata_json else {}
+    metadata["webhook_data"] = data
+    metadata["webhook_received_at"] = datetime.utcnow().isoformat()
+    withdrawal.metadata_json = json.dumps(metadata)
+    
+    db.commit()
+    return {"status": "ok", "message": "Saque processado"}
+
+
+async def _process_gatebox_reversal(db: Session, external_id: str, transaction_id: str, identifier: str, status_val: str, amount: float, data: dict):
+    """Processa estorno de depósito (chargeback) do Gatebox"""
+    deposit = None
+    if external_id:
+        deposit = db.query(Deposit).filter(Deposit.external_id == external_id).first()
+    if not deposit and identifier:
+        deposit = db.query(Deposit).filter(Deposit.external_id == identifier).first()
+    if not deposit and transaction_id:
+        deposit = db.query(Deposit).filter(Deposit.external_id == transaction_id).first()
+    
+    if not deposit:
+        return {"status": "ok", "message": "Depósito não encontrado para estorno"}
+    
+    # Reverter depósito (mesma lógica do SuitPay chargeback)
+    if deposit.status == TransactionStatus.APPROVED:
+        user = db.query(User).filter(User.id == deposit.user_id).first()
+        if user:
+            # Reverter saldo real
+            if user.balance >= deposit.amount:
+                user.balance -= deposit.amount
+            # Reverter bônus
+            dep_meta = json.loads(deposit.metadata_json) if deposit.metadata_json else {}
+            total_bonus = dep_meta.get("total_bonus_credited", 0.0)
+            if total_bonus > 0 and (user.bonus_balance or 0) >= total_bonus:
+                user.bonus_balance = (user.bonus_balance or 0) - total_bonus
+            # Reverter cupom
+            if dep_meta.get("coupon_id"):
+                coupon = db.query(Coupon).filter(Coupon.id == dep_meta["coupon_id"]).first()
+                if coupon:
+                    coupon.used_count = max(0, (coupon.used_count or 0) - 1)
+            # Reverter afiliado
+            if user.referred_by_affiliate_id:
+                aff = db.query(Affiliate).filter(Affiliate.id == user.referred_by_affiliate_id).first()
+                if aff:
+                    aff_user = db.query(User).filter(User.id == aff.user_id).first()
+                    ftd = db.query(FTD).filter(FTD.deposit_id == deposit.id).first()
+                    revshare = round(deposit.amount * (aff.revshare_percentage / 100.0), 2) if (aff.revshare_percentage or 0) > 0 else 0.0
+                    cpa = float(aff.cpa_amount) if ftd and (aff.cpa_amount or 0) > 0 else 0.0
+                    to_revert_aff = cpa + revshare
+                    if to_revert_aff > 0 and aff_user and (aff_user.balance or 0) >= to_revert_aff:
+                        aff_user.balance -= to_revert_aff
+                        aff.total_cpa_earned = max(0, (aff.total_cpa_earned or 0) - cpa)
+                        aff.total_revshare_earned = max(0, (aff.total_revshare_earned or 0) - revshare)
+        deposit.status = TransactionStatus.CANCELLED
+    
+    metadata = json.loads(deposit.metadata_json) if deposit.metadata_json else {}
+    metadata["reversal_data"] = data
+    metadata["reversal_received_at"] = datetime.utcnow().isoformat()
+    deposit.metadata_json = json.dumps(metadata)
+    
+    db.commit()
+    return {"status": "ok", "message": "Estorno de depósito processado"}
+
+
+async def _process_gatebox_reversal_out(db: Session, external_id: str, transaction_id: str, identifier: str, status_val: str, data: dict):
+    """Processa estorno de saque do Gatebox"""
+    withdrawal = None
+    if external_id:
+        withdrawal = db.query(Withdrawal).filter(Withdrawal.external_id == external_id).first()
+    if not withdrawal and identifier:
+        withdrawal = db.query(Withdrawal).filter(Withdrawal.external_id == identifier).first()
+    if not withdrawal and transaction_id:
+        withdrawal = db.query(Withdrawal).filter(Withdrawal.external_id == transaction_id).first()
+    
+    if not withdrawal:
+        return {"status": "ok", "message": "Saque não encontrado para estorno"}
+    
+    # Se o saque foi aprovado, reverter (devolver saldo ao usuário)
+    if withdrawal.status == TransactionStatus.APPROVED:
+        user = db.query(User).filter(User.id == withdrawal.user_id).first()
+        if user:
+            user.balance += withdrawal.amount
+        withdrawal.status = TransactionStatus.CANCELLED
+    
+    metadata = json.loads(withdrawal.metadata_json) if withdrawal.metadata_json else {}
+    metadata["reversal_out_data"] = data
+    metadata["reversal_out_received_at"] = datetime.utcnow().isoformat()
+    withdrawal.metadata_json = json.dumps(metadata)
+    
+    db.commit()
+    return {"status": "ok", "message": "Estorno de saque processado"}
+
+
+async def _process_gatebox_refund(db: Session, external_id: str, transaction_id: str, identifier: str, status_val: str, data: dict):
+    """Processa reembolso do Gatebox"""
+    # Reembolso pode ser de depósito ou saque - tentar ambos
+    deposit = None
+    withdrawal = None
+    
+    if external_id:
+        deposit = db.query(Deposit).filter(Deposit.external_id == external_id).first()
+        withdrawal = db.query(Withdrawal).filter(Withdrawal.external_id == external_id).first()
+    
+    if deposit:
+        # Reembolso de depósito - tratar como estorno
+        return await _process_gatebox_reversal(db, external_id, transaction_id, identifier, status_val, deposit.amount, data)
+    elif withdrawal:
+        # Reembolso de saque - tratar como estorno de saque
+        return await _process_gatebox_reversal_out(db, external_id, transaction_id, identifier, status_val, data)
+    else:
+        return {"status": "ok", "message": "Transação não encontrada para reembolso"}
+
+
+@webhook_router.post("/gatebox/pix-cashin")
+async def webhook_gatebox_cashin(request: Request, db: Session = Depends(get_db)):
+    """
+    Webhook legado para PIX Cash-in - redireciona para webhook unificado
+    Mantido para compatibilidade
+    """
+    # Adicionar tipo ao payload e redirecionar para webhook unificado
+    from fastapi import Request as FastAPIRequest
+    data = await request.json()
+    data["type"] = "PIX_PAY_IN"
+    # Criar novo request com dados modificados
+    class ModifiedRequest:
+        def __init__(self, original_request, new_data):
+            self._original = original_request
+            self._data = new_data
+        async def json(self):
+            return self._data
+        def __getattr__(self, name):
+            return getattr(self._original, name)
+    modified_request = ModifiedRequest(request, data)
+    return await webhook_gatebox(modified_request, db)
 
 
 @webhook_router.post("/gatebox/check-status")
@@ -1086,53 +1291,23 @@ async def gatebox_check_status(
 @webhook_router.post("/gatebox/pix-cashout")
 async def webhook_gatebox_cashout(request: Request, db: Session = Depends(get_db)):
     """
-    Webhook para receber notificações de PIX Cash-out (saques) do Gatebox
+    Webhook legado para PIX Cash-out - redireciona para webhook unificado
+    Mantido para compatibilidade
     """
-    try:
-        data = await request.json()
-        print(f"[WEBHOOK GATEBOX CASH-OUT] Dados recebidos: {json.dumps(data, indent=2)}")
-        
-        gateway = db.query(Gateway).filter(
-            Gateway.type == "gatebox",
-            Gateway.is_active == True
-        ).first()
-        
-        if not gateway:
-            return {"status": "ok", "message": "Gateway Gatebox não encontrado"}
-        
-        transaction_id = data.get("transactionId") or data.get("transaction_id")
-        external_id = data.get("externalId") or data.get("external_id")
-        status_val = data.get("status") or data.get("statusTransaction")
-        
-        withdrawal = None
-        if external_id:
-            withdrawal = db.query(Withdrawal).filter(Withdrawal.external_id == external_id).first()
-        if not withdrawal and transaction_id:
-            withdrawal = db.query(Withdrawal).filter(Withdrawal.external_id == transaction_id).first()
-        
-        if not withdrawal:
-            return {"status": "ok", "message": "Saque não encontrado"}
-        
-        status_upper = str(status_val).upper() if status_val else ""
-        if status_upper in ["PAID", "COMPLETED", "SUCCESS", "CONFIRMED", "APPROVED"]:
-            withdrawal.status = TransactionStatus.APPROVED
-        elif status_upper in ["CANCELED", "CANCELLED", "FAILED", "ERROR"]:
-            if withdrawal.status == TransactionStatus.PENDING:
-                user = db.query(User).filter(User.id == withdrawal.user_id).first()
-                if user:
-                    user.balance += withdrawal.amount
-            withdrawal.status = TransactionStatus.CANCELLED
-        
-        metadata = json.loads(withdrawal.metadata_json) if withdrawal.metadata_json else {}
-        metadata["webhook_data"] = data
-        metadata["webhook_received_at"] = datetime.utcnow().isoformat()
-        withdrawal.metadata_json = json.dumps(metadata)
-        
-        db.commit()
-        return {"status": "ok", "message": "Webhook processado"}
-    except Exception as e:
-        print(f"[WEBHOOK GATEBOX CASH-OUT] Erro: {str(e)}")
-        return {"status": "error", "message": str(e)}
+    # Adicionar tipo ao payload e redirecionar para webhook unificado
+    data = await request.json()
+    data["type"] = "PIX_PAY_OUT"
+    # Criar novo request com dados modificados
+    class ModifiedRequest:
+        def __init__(self, original_request, new_data):
+            self._original = original_request
+            self._data = new_data
+        async def json(self):
+            return self._data
+        def __getattr__(self, name):
+            return getattr(self._original, name)
+    modified_request = ModifiedRequest(request, data)
+    return await webhook_gatebox(modified_request, db)
 
 
 # ========== IGameWin Seamless Mode - gold_api (Site Endpoint) ==========
