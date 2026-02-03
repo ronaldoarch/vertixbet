@@ -1867,6 +1867,7 @@ function BrandingTab({ token }: { token: string }) {
 
   const fetchAssets = async () => {
     setLoading(true);
+    setMessage('');
     try {
       const [logoRes, bannersRes] = await Promise.all([
         fetch(`${API_URL}/api/admin/media/list?media_type=logo`, {
@@ -1878,16 +1879,37 @@ function BrandingTab({ token }: { token: string }) {
       ]);
       
       if (logoRes.ok) {
-        const logosData = await logoRes.json();
-        setLogos(logosData.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+        const contentType = logoRes.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const logosData = await logoRes.json();
+          setLogos(logosData.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+        } else {
+          const text = await logoRes.text();
+          console.error('Resposta não-JSON ao buscar logos:', text);
+          setMessage('Erro ao carregar logos: resposta inválida do servidor');
+        }
+      } else {
+        const errorText = await logoRes.text().catch(() => 'Erro desconhecido');
+        console.error('Erro ao buscar logos:', logoRes.status, errorText);
       }
       
       if (bannersRes.ok) {
-        const bannersData = await bannersRes.json();
-        setBanners(bannersData.sort((a: any, b: any) => a.position - b.position));
+        const contentType = bannersRes.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const bannersData = await bannersRes.json();
+          setBanners(bannersData.sort((a: any, b: any) => a.position - b.position));
+        } else {
+          const text = await bannersRes.text();
+          console.error('Resposta não-JSON ao buscar banners:', text);
+          setMessage('Erro ao carregar banners: resposta inválida do servidor');
+        }
+      } else {
+        const errorText = await bannersRes.text().catch(() => 'Erro desconhecido');
+        console.error('Erro ao buscar banners:', bannersRes.status, errorText);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao buscar assets:', err);
+      setMessage(err?.message || 'Erro ao carregar mídia. Verifique sua conexão.');
     } finally {
       setLoading(false);
     }
@@ -1913,8 +1935,20 @@ function BrandingTab({ token }: { token: string }) {
       });
       
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || 'Erro ao fazer upload');
+        const contentType = res.headers.get('content-type');
+        let errorMessage = 'Erro ao fazer upload';
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            const err = await res.json();
+            errorMessage = err.detail || errorMessage;
+          } catch {
+            errorMessage = `Erro ${res.status}: ${res.statusText}`;
+          }
+        } else {
+          const text = await res.text();
+          errorMessage = `Erro ${res.status}: ${text.substring(0, 100)}`;
+        }
+        throw new Error(errorMessage);
       }
       
       await fetchAssets();
