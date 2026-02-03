@@ -14,3 +14,5 @@ python-jose[cryptography]==3.3.0
 httpx==0.27.2
 python-dateutil==2.9.0.post0
 slowapi==0.1.9
+qrcode[pil]==7.4.2
+Pillow==10.4.0

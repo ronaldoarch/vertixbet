@@ -16,6 +16,13 @@ from datetime import datetime, timedelta, time as dt_time
 import json
 import uuid
 import os
+import base64
+from io import BytesIO
+try:
+    import qrcode
+    QRCODE_AVAILABLE = True
+except ImportError:
+    QRCODE_AVAILABLE = False
 
 router = APIRouter(prefix="/api/public/payments", tags=["payments"])
 webhook_router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
@@ -280,9 +287,32 @@ async def create_pix_deposit(
         # Extrair transaction_id e identifier
         transaction_id = gatebox_data.get("transactionId") or gatebox_data.get("identifier") or gatebox_data.get("transaction_id")
         
+        # Gerar QR Code em base64 a partir do código PIX (Gatebox retorna apenas o código em texto)
+        qr_code_base64 = gatebox_data.get("qrCodeBase64") or gatebox_data.get("qrcodeBase64")
+        if not qr_code_base64 and QRCODE_AVAILABLE and qr_code:
+            try:
+                # Gerar QR Code a partir do código PIX
+                qr = qrcode.QRCode(
+                    version=1,
+                    error_correction=qrcode.constants.ERROR_CORRECT_L,
+                    box_size=10,
+                    border=4,
+                )
+                qr.add_data(qr_code)
+                qr.make(fit=True)
+                img = qr.make_image(fill_color="black", back_color="white")
+                # Converter para base64
+                buffered = BytesIO()
+                img.save(buffered, format="PNG")
+                qr_code_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
+                print(f"[DEPOSIT PIX] QR Code gerado com sucesso a partir do código PIX")
+            except Exception as e:
+                print(f"[DEPOSIT PIX] Erro ao gerar QR Code: {str(e)}")
+                qr_code_base64 = None
+        
         metadata = {
             "pix_code": qr_code,
-            "pix_qr_code_base64": gatebox_data.get("qrCodeBase64") or gatebox_data.get("qrcodeBase64"),
+            "pix_qr_code_base64": qr_code_base64,
             "transaction_id": transaction_id,
             "identifier": gatebox_data.get("identifier"),
             "external_id": external_id,
