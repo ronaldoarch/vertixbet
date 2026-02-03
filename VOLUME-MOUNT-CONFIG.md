@@ -25,7 +25,11 @@ No modal **"Add Volume Mount"**, preencha:
 ```
 media-storage
 ```
-ou qualquer nome descritivo como `vertixbet-media` ou `uploads-persistent`
+⚠️ **IMPORTANTE**: 
+- Use apenas letras, números e hífens (`-`)
+- **NÃO use espaços** no nome
+- Exemplos válidos: `media-storage`, `vertixbet-media`, `uploads-persistent`
+- Exemplos inválidos: `media storage` (tem espaço), `media-storage ` (espaço no final)
 
 #### **Source Path** (opcional):
 Deixe vazio ou use um caminho no host se necessário. O Coolify geralmente gerencia isso automaticamente quando você usa um nome de volume.
@@ -78,6 +82,21 @@ Após a configuração, a estrutura dentro do container será:
 4. **Múltiplos Containers**: Se você usar múltiplas instâncias do backend, certifique-se de que todas compartilham o mesmo volume ou use um storage compartilhado (NFS, S3, etc.).
 
 ## 🚨 Troubleshooting
+
+### Erro: "volumes additional properties '...' not allowed" ou "Deployment failed"
+
+**Causa**: O nome do volume tem espaços ou caracteres inválidos.
+
+**Solução**:
+1. Acesse a configuração do serviço backend no Coolify
+2. Vá para a aba **"Advanced"** ou **"Volumes"**
+3. **Remova** o volume mount existente (se houver)
+4. Crie um **novo** volume mount com:
+   - **Name**: `media-storage` (sem espaços, apenas letras e hífen)
+   - **Destination Path**: `/app/uploads`
+5. Salve e faça um novo deploy
+
+**Verificação**: O nome do volume não deve ter espaços antes, depois ou no meio.
 
 ### Arquivos não persistem após deploy
 
