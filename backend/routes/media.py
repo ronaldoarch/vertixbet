@@ -314,3 +314,33 @@ async def serve_uploaded_file(media_type: str, filename: str):
         file_path,
         media_type="image/jpeg"  # FastAPI vai detectar automaticamente
     )
+
+
+# Rota de fallback para URLs antigas (sem media_type) - compatibilidade
+@public_router.get("/uploads/{filename}")
+async def serve_uploaded_file_fallback(filename: str, db: Session = Depends(get_db)):
+    """Servir arquivo de upload (fallback para URLs antigas sem tipo)"""
+    # Tentar encontrar o arquivo no banco de dados para determinar o tipo
+    asset = db.query(MediaAsset).filter(MediaAsset.filename == filename).first()
+    
+    if asset:
+        # Se encontrou no banco, usar o tipo do asset
+        upload_dir = "logos" if asset.type == MediaType.LOGO else "banners"
+        file_path = UPLOAD_BASE_DIR / upload_dir / filename
+    else:
+        # Tentar em ambos os diretórios (fallback)
+        for upload_dir in ["logos", "banners"]:
+            file_path = UPLOAD_BASE_DIR / upload_dir / filename
+            if file_path.exists():
+                break
+        else:
+            # Não encontrou em nenhum lugar
+            raise HTTPException(status_code=404, detail=f"Arquivo não encontrado: {filename}")
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail=f"Arquivo não encontrado: {file_path}")
+
+    return FileResponse(
+        file_path,
+        media_type="image/jpeg"  # FastAPI vai detectar automaticamente
+    )
