@@ -480,6 +480,13 @@ async def create_pix_withdrawal(
                 if not doc_validation:
                     doc_validation = user.cpf or ""
             
+            print(f"[WITHDRAWAL PIX] Dados para Gatebox:")
+            print(f"  - External ID: {external_id}")
+            print(f"  - Chave PIX: {request.pix_key} (tipo: {request.pix_key_type})")
+            print(f"  - Nome: {payer_name}")
+            print(f"  - Valor: R$ {request.amount:.2f}")
+            print(f"  - Documento: {doc_validation if doc_validation else '(não fornecido)'}")
+            
             try:
                 pix_response = await gatebox.withdraw_pix(
                     external_id=external_id,
@@ -1205,25 +1212,42 @@ async def _process_gatebox_deposit(db: Session, external_id: str, transaction_id
 
 async def _process_gatebox_withdrawal(db: Session, external_id: str, transaction_id: str, identifier: str, status_val: str, data: dict):
     """Processa webhook de saque PIX do Gatebox"""
+    print(f"[WEBHOOK GATEBOX WITHDRAWAL] Processando saque - External ID: {external_id}, Transaction ID: {transaction_id}, Identifier: {identifier}, Status: {status_val}")
+    
     withdrawal = None
     if external_id:
         withdrawal = db.query(Withdrawal).filter(Withdrawal.external_id == external_id).first()
+        if withdrawal:
+            print(f"[WEBHOOK GATEBOX WITHDRAWAL] Saque encontrado por external_id: {withdrawal.id}")
     if not withdrawal and identifier:
         withdrawal = db.query(Withdrawal).filter(Withdrawal.external_id == identifier).first()
+        if withdrawal:
+            print(f"[WEBHOOK GATEBOX WITHDRAWAL] Saque encontrado por identifier: {withdrawal.id}")
     if not withdrawal and transaction_id:
         withdrawal = db.query(Withdrawal).filter(Withdrawal.external_id == transaction_id).first()
+        if withdrawal:
+            print(f"[WEBHOOK GATEBOX WITHDRAWAL] Saque encontrado por transaction_id: {withdrawal.id}")
     
     if not withdrawal:
+        print(f"[WEBHOOK GATEBOX WITHDRAWAL] Saque não encontrado - External ID: {external_id}, Identifier: {identifier}, Transaction ID: {transaction_id}")
         return {"status": "ok", "message": "Saque não encontrado"}
     
+    print(f"[WEBHOOK GATEBOX WITHDRAWAL] Saque encontrado - ID: {withdrawal.id}, Valor: R$ {withdrawal.amount:.2f}, Status atual: {withdrawal.status}")
+    
     status_upper = str(status_val).upper() if status_val else ""
+    print(f"[WEBHOOK GATEBOX WITHDRAWAL] Status recebido: {status_val} (normalizado: {status_upper})")
+    
     if status_upper in ["PAID", "COMPLETED", "SUCCESS", "CONFIRMED", "APPROVED"]:
+        print(f"[WEBHOOK GATEBOX WITHDRAWAL] Aprovando saque {withdrawal.id}")
         withdrawal.status = TransactionStatus.APPROVED
     elif status_upper in ["CANCELED", "CANCELLED", "FAILED", "ERROR"]:
+        print(f"[WEBHOOK GATEBOX WITHDRAWAL] Cancelando saque {withdrawal.id} - Status: {status_upper}")
         if withdrawal.status == TransactionStatus.PENDING:
             user = db.query(User).filter(User.id == withdrawal.user_id).first()
             if user:
+                old_balance = user.balance
                 user.balance += withdrawal.amount
+                print(f"[WEBHOOK GATEBOX WITHDRAWAL] Saldo revertido - Usuário {user.id}: R$ {old_balance:.2f} -> R$ {user.balance:.2f}")
         withdrawal.status = TransactionStatus.CANCELLED
     
     metadata = json.loads(withdrawal.metadata_json) if withdrawal.metadata_json else {}

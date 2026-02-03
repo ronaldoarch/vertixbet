@@ -198,7 +198,13 @@ class GateboxAPI:
         if description:
             payload["description"] = description
         
-        return await self._request("POST", "/v1/customers/pix/withdraw", payload)
+        print(f"[GATEBOX WITHDRAW] Enviando payload: {json.dumps(payload, indent=2)}")
+        result = await self._request("POST", "/v1/customers/pix/withdraw", payload)
+        if result:
+            print(f"[GATEBOX WITHDRAW] Resposta recebida: {json.dumps(result, indent=2)}")
+        else:
+            print(f"[GATEBOX WITHDRAW] Erro na requisição: {self.last_error}")
+        return result
     
     async def get_balance(self) -> Optional[float]:
         """
