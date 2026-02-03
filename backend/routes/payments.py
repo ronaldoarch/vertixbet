@@ -478,10 +478,21 @@ async def create_pix_withdrawal(
                 detail=f"Erro ao processar saque no Gatebox. {gatebox.last_error or 'Erro desconhecido'}"
             )
         
+        # Gatebox retorna resposta no formato: { "statusCode": 200, "data": { "transactionId": "...", "endToEnd": "...", ... } }
+        gatebox_data = pix_response.get("data") if pix_response.get("data") else pix_response
+        status_code = pix_response.get("statusCode")
+        
+        # Verificar se a resposta indica sucesso
+        if status_code and status_code != 200:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Gatebox retornou erro no saque. Status: {status_code}, Resposta: {pix_response}"
+            )
+        
         metadata = {
             "external_id": external_id,
-            "transaction_id": pix_response.get("transactionId"),
-            "end_to_end": pix_response.get("endToEnd"),
+            "transaction_id": gatebox_data.get("transactionId") or gatebox_data.get("identifier"),
+            "end_to_end": gatebox_data.get("endToEnd"),
             "gatebox_response": pix_response
         }
     else:
@@ -539,8 +550,12 @@ async def create_pix_withdrawal(
             "suitpay_response": pix_response
         }
     
-    # External ID para withdrawal: Gatebox usa transactionId, SuitPay usa idTransaction ou external_id
-    external_id_for_withdrawal = pix_response.get("transactionId") or pix_response.get("idTransaction") or external_id
+    # External ID para withdrawal: Gatebox usa identifier/transactionId dentro de data, SuitPay usa idTransaction ou external_id
+    if gateway.type == "gatebox":
+        gatebox_data = pix_response.get("data") if pix_response.get("data") else pix_response
+        external_id_for_withdrawal = gatebox_data.get("identifier") or gatebox_data.get("transactionId") or gatebox_data.get("externalId") or external_id
+    else:
+        external_id_for_withdrawal = pix_response.get("idTransaction") or external_id
     
     # Criar registro de saque
     withdrawal = Withdrawal(
