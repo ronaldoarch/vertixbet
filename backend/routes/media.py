@@ -316,6 +316,8 @@ async def get_public_logo(db: Session = Depends(get_db)):
 @public_router.get("/uploads/{media_type}/{filename}")
 async def serve_uploaded_file(media_type: str, filename: str):
     """Servir arquivo de upload"""
+    logger.info(f"[SERVE FILE] Requisição recebida: media_type={media_type}, filename={filename}")
+    
     # Mapear tipo da URL para diretório físico (plural)
     dir_mapping = {
         "logo": "logos",
@@ -327,21 +329,22 @@ async def serve_uploaded_file(media_type: str, filename: str):
     file_path = UPLOAD_BASE_DIR / upload_dir / filename
     
     # Log para debug
-    logger.debug(f"Tentando servir arquivo: {file_path.absolute()}")
-    logger.debug(f"Arquivo existe: {file_path.exists()}")
+    logger.info(f"[SERVE FILE] Caminho completo: {file_path.absolute()}")
+    logger.info(f"[SERVE FILE] Arquivo existe: {file_path.exists()}")
     
     if not file_path.exists():
         # Verificar se o diretório existe
         dir_path = UPLOAD_BASE_DIR / upload_dir
-        logger.warning(f"Arquivo não encontrado: {file_path.absolute()}")
-        logger.warning(f"Diretório existe: {dir_path.exists()}")
+        logger.error(f"[SERVE FILE] Arquivo não encontrado: {file_path.absolute()}")
+        logger.error(f"[SERVE FILE] Diretório existe: {dir_path.exists()}")
+        logger.error(f"[SERVE FILE] UPLOAD_BASE_DIR: {UPLOAD_BASE_DIR.absolute()}")
         if dir_path.exists():
             # Listar arquivos no diretório para debug
             try:
                 files = list(dir_path.iterdir())
-                logger.warning(f"Arquivos no diretório: {[f.name for f in files]}")
+                logger.error(f"[SERVE FILE] Arquivos no diretório: {[f.name for f in files]}")
             except Exception as e:
-                logger.error(f"Erro ao listar diretório: {e}")
+                logger.error(f"[SERVE FILE] Erro ao listar diretório: {e}")
         raise HTTPException(status_code=404, detail=f"Arquivo não encontrado: {file_path.absolute()}")
 
     # Detectar tipo MIME baseado na extensão
@@ -356,6 +359,7 @@ async def serve_uploaded_file(media_type: str, filename: str):
     }
     mime_type = mime_map.get(ext, "image/jpeg")
 
+    logger.info(f"[SERVE FILE] Servindo arquivo com sucesso: {filename}, tipo: {mime_type}")
     return FileResponse(
         file_path,
         media_type=mime_type,
@@ -367,6 +371,8 @@ async def serve_uploaded_file(media_type: str, filename: str):
 @public_router.get("/uploads/{filename}")
 async def serve_uploaded_file_fallback(filename: str, db: Session = Depends(get_db)):
     """Servir arquivo de upload (fallback para URLs antigas sem tipo)"""
+    logger.info(f"[SERVE FILE FALLBACK] Requisição recebida: filename={filename}")
+    
     # Tentar encontrar o arquivo no banco de dados para determinar o tipo
     asset = db.query(MediaAsset).filter(MediaAsset.filename == filename).first()
     
