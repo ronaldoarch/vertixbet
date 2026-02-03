@@ -104,6 +104,42 @@ def get_suitpay_client(gateway: Gateway) -> SuitPayAPI:
         )
 
 
+def _format_phone_for_gatebox(phone: str) -> Optional[str]:
+    """Formata telefone para o formato esperado pelo Gatebox (+5514987654321)"""
+    if not phone or not phone.strip():
+        return None
+    # Remove caracteres não numéricos e espaços
+    digits = ''.join(c for c in phone.strip() if c.isdigit())
+    if not digits or len(digits) < 10:
+        return None
+    
+    # Se já começa com +55, retorna como está (mas garante formato correto)
+    if phone.strip().startswith('+55') and len(digits) >= 12:
+        return f"+{digits}"
+    
+    # Se já começa com 55 (sem +), adiciona apenas o +
+    if digits.startswith('55') and len(digits) >= 12:
+        return f"+{digits}"
+    
+    # Se começa com 0, remove o 0
+    if digits.startswith('0'):
+        digits = digits[1:]
+    
+    # Se tem 10 dígitos (DDD 2 dígitos + número 8 dígitos), adiciona código do país 55
+    if len(digits) == 10:
+        return f"+55{digits}"
+    
+    # Se tem 11 dígitos (DDD 2 dígitos + número 9 dígitos com 9), adiciona código do país 55
+    if len(digits) == 11:
+        return f"+55{digits}"
+    
+    # Se já tem 12 ou 13 dígitos (55 + DDD + número), adiciona apenas o +
+    if len(digits) >= 12:
+        return f"+{digits}"
+    
+    return None
+
+
 @router.get("/validate-coupon")
 async def validate_coupon_public(
     code: str,
@@ -175,42 +211,6 @@ async def create_pix_deposit(
     payer_email = (request.payer_email or "").strip() or _get_setting(db, "pix_default_email") or (user.email or "cliente@example.com")
     # Telefone: request -> SiteSettings -> usuário
     payer_phone_raw = (request.payer_phone or "").strip() or _get_setting(db, "pix_default_phone") or (user.phone or user.username or "")
-    
-    # Função para formatar telefone para Gatebox (formato: +5514987654321)
-    def _format_phone_for_gatebox(phone: str) -> Optional[str]:
-        """Formata telefone para o formato esperado pelo Gatebox (+5514987654321)"""
-        if not phone or not phone.strip():
-            return None
-        # Remove caracteres não numéricos e espaços
-        digits = ''.join(c for c in phone.strip() if c.isdigit())
-        if not digits or len(digits) < 10:
-            return None
-        
-        # Se já começa com +55, retorna como está (mas garante formato correto)
-        if phone.strip().startswith('+55') and len(digits) >= 12:
-            return f"+{digits}"
-        
-        # Se já começa com 55 (sem +), adiciona apenas o +
-        if digits.startswith('55') and len(digits) >= 12:
-            return f"+{digits}"
-        
-        # Se começa com 0, remove o 0
-        if digits.startswith('0'):
-            digits = digits[1:]
-        
-        # Se tem 10 dígitos (DDD 2 dígitos + número 8 dígitos), adiciona código do país 55
-        if len(digits) == 10:
-            return f"+55{digits}"
-        
-        # Se tem 11 dígitos (DDD 2 dígitos + número 9 dígitos com 9), adiciona código do país 55
-        if len(digits) == 11:
-            return f"+55{digits}"
-        
-        # Se já tem 12 ou 13 dígitos (55 + DDD + número), adiciona apenas o +
-        if len(digits) >= 12:
-            return f"+{digits}"
-        
-        return None
     
     payer_phone = _format_phone_for_gatebox(payer_phone_raw) if payer_phone_raw else None
     
