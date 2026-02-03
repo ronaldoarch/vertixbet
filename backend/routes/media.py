@@ -107,16 +107,25 @@ async def upload_media(
         upload_dir = UPLOAD_DIRS[media_type_enum]
         file_path = upload_dir / filename
 
+        # Log antes de salvar
+        logger.info(f"[UPLOAD] Salvando arquivo: {filename}")
+        logger.info(f"[UPLOAD] Diretório: {upload_dir.absolute()}")
+        logger.info(f"[UPLOAD] Caminho completo: {file_path.absolute()}")
+        logger.info(f"[UPLOAD] Diretório existe: {upload_dir.exists()}")
+
         # Salvar arquivo
         with open(file_path, "wb") as f:
             f.write(file_content)
 
         # Verificar se arquivo foi salvo
         if not file_path.exists():
+            logger.error(f"[UPLOAD] ERRO: Arquivo não foi salvo em {file_path.absolute()}")
             raise HTTPException(
                 status_code=500,
-                detail="Erro ao salvar arquivo"
+                detail=f"Erro ao salvar arquivo em {file_path.absolute()}"
             )
+        
+        logger.info(f"[UPLOAD] Arquivo salvo com sucesso: {file_path.absolute()}")
 
         # Obter próxima posição para banners
         position = 0
