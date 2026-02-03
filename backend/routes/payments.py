@@ -167,7 +167,45 @@ async def create_pix_deposit(
     # E-mail: request -> SiteSettings -> usuário
     payer_email = (request.payer_email or "").strip() or _get_setting(db, "pix_default_email") or (user.email or "cliente@example.com")
     # Telefone: request -> SiteSettings -> usuário
-    payer_phone = (request.payer_phone or "").strip() or _get_setting(db, "pix_default_phone") or (user.phone or user.username or "")
+    payer_phone_raw = (request.payer_phone or "").strip() or _get_setting(db, "pix_default_phone") or (user.phone or user.username or "")
+    
+    # Função para formatar telefone para Gatebox (formato: +5514987654321)
+    def _format_phone_for_gatebox(phone: str) -> Optional[str]:
+        """Formata telefone para o formato esperado pelo Gatebox (+5514987654321)"""
+        if not phone or not phone.strip():
+            return None
+        # Remove caracteres não numéricos e espaços
+        digits = ''.join(c for c in phone.strip() if c.isdigit())
+        if not digits or len(digits) < 10:
+            return None
+        
+        # Se já começa com +55, retorna como está (mas garante formato correto)
+        if phone.strip().startswith('+55') and len(digits) >= 12:
+            return f"+{digits}"
+        
+        # Se já começa com 55 (sem +), adiciona apenas o +
+        if digits.startswith('55') and len(digits) >= 12:
+            return f"+{digits}"
+        
+        # Se começa com 0, remove o 0
+        if digits.startswith('0'):
+            digits = digits[1:]
+        
+        # Se tem 10 dígitos (DDD 2 dígitos + número 8 dígitos), adiciona código do país 55
+        if len(digits) == 10:
+            return f"+55{digits}"
+        
+        # Se tem 11 dígitos (DDD 2 dígitos + número 9 dígitos com 9), adiciona código do país 55
+        if len(digits) == 11:
+            return f"+55{digits}"
+        
+        # Se já tem 12 ou 13 dígitos (55 + DDD + número), adiciona apenas o +
+        if len(digits) >= 12:
+            return f"+{digits}"
+        
+        return None
+    
+    payer_phone = _format_phone_for_gatebox(payer_phone_raw) if payer_phone_raw else None
     
     # Buscar gateway PIX ativo
     gateway = get_active_pix_gateway(db)
@@ -197,6 +235,10 @@ async def create_pix_deposit(
         callback_url = f"{webhook_url}/api/webhooks/gatebox/pix-cashin"
         print(f"[DEPOSIT PIX] Webhook URL: {callback_url}")
         
+        # Gatebox requer telefone no formato +5514987654321 (código país + DDD + número)
+        # Se não tiver telefone válido, não enviar o campo (é opcional)
+        gatebox_phone = payer_phone if payer_phone and payer_phone.startswith('+') else None
+        
         pix_response = await gatebox.create_pix_qrcode(
             external_id=external_id,
             amount=request.amount,
@@ -204,7 +246,7 @@ async def create_pix_deposit(
             name=payer_name,
             expire=3600,  # 1 hora
             email=payer_email,
-            phone=payer_phone or None,
+            phone=gatebox_phone,  # Só envia se estiver formatado corretamente
             identification=f"Depósito - {user.username}",
             description=f"Depósito de R$ {request.amount:.2f}"
         )
