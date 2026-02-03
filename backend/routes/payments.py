@@ -409,7 +409,7 @@ async def create_pix_withdrawal(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Cria saque via PIX usando SuitPay
+    Cria saque via PIX usando SuitPay ou Gatebox
     Conforme documentação oficial: POST /api/v1/gateway/pix-payment
     
     IMPORTANTE: É necessário cadastrar o IP do servidor na SuitPay
@@ -418,8 +418,9 @@ async def create_pix_withdrawal(
     Args:
         request: Dados do saque (amount, pix_key, pix_key_type, document_validation)
     """
-    # Usar usuário autenticado
-    user = current_user
+    try:
+        # Usar usuário autenticado
+        user = current_user
     
     # Verificar saldo
     if user.balance < request.amount:
@@ -463,19 +464,31 @@ async def create_pix_withdrawal(
             )
         
         # Gatebox requer name e pode requerer documentNumber
-        payer_name = request.payer_name or user.display_name or user.username or "Cliente"
+        # Usar display_name do usuário ou username como fallback
+        payer_name = user.display_name or user.username or "Cliente"
         doc_validation = (request.document_validation or "").strip()
         if not doc_validation:
-            doc_validation = user.cpf or ""
+            # Se não fornecido, tentar usar CPF do usuário ou a própria chave PIX se for documento
+            if request.pix_key_type == "document":
+                doc_validation = "".join(c for c in request.pix_key if c.isdigit())
+            if not doc_validation:
+                doc_validation = user.cpf or ""
         
-        pix_response = await gatebox.withdraw_pix(
-            external_id=external_id,
-            key=request.pix_key,
-            name=payer_name,
-            amount=request.amount,
-            document_number=doc_validation if doc_validation else None,
-            description=f"Saque de R$ {request.amount:.2f}"
-        )
+        try:
+            pix_response = await gatebox.withdraw_pix(
+                external_id=external_id,
+                key=request.pix_key,
+                name=payer_name,
+                amount=request.amount,
+                document_number=doc_validation if doc_validation else None,
+                description=f"Saque de R$ {request.amount:.2f}"
+            )
+        except Exception as e:
+            print(f"[WITHDRAWAL GATEBOX] Erro ao chamar API: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Erro ao processar saque no Gatebox: {str(e)}"
+            )
         
         if not pix_response:
             raise HTTPException(
@@ -562,25 +575,38 @@ async def create_pix_withdrawal(
     else:
         external_id_for_withdrawal = pix_response.get("idTransaction") or external_id
     
-    # Criar registro de saque
-    withdrawal = Withdrawal(
-        user_id=user.id,
-        gateway_id=gateway.id,
-        amount=request.amount,
-        status=TransactionStatus.PENDING,
-        transaction_id=str(uuid.uuid4()),
-        external_id=external_id_for_withdrawal,
-        metadata_json=json.dumps(metadata)
-    )
-    
-    # Bloquear saldo do usuário
-    user.balance -= request.amount
-    
-    db.add(withdrawal)
-    db.commit()
-    db.refresh(withdrawal)
-    
-    return withdrawal
+        # Criar registro de saque
+        withdrawal = Withdrawal(
+            user_id=user.id,
+            gateway_id=gateway.id,
+            amount=request.amount,
+            status=TransactionStatus.PENDING,
+            transaction_id=str(uuid.uuid4()),
+            external_id=external_id_for_withdrawal,
+            metadata_json=json.dumps(metadata)
+        )
+        
+        # Bloquear saldo do usuário
+        user.balance -= request.amount
+        
+        db.add(withdrawal)
+        db.commit()
+        db.refresh(withdrawal)
+        
+        return withdrawal
+    except HTTPException:
+        # Re-raise HTTP exceptions (já têm status code apropriado)
+        raise
+    except Exception as e:
+        # Capturar qualquer outro erro não tratado
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"[WITHDRAWAL ERROR] Erro não tratado: {str(e)}")
+        print(f"[WITHDRAWAL ERROR] Traceback: {error_trace}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro interno ao processar saque: {str(e)}"
+        )
 
 
 # ========== WEBHOOKS ==========
