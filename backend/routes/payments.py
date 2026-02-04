@@ -1938,3 +1938,29 @@ async def get_my_bets(
         }
         for bet in bets
     ]
+
+
+@router.get("/my-notifications")
+async def get_my_notifications(
+    limit: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Retorna notificações do usuário autenticado"""
+    notifications = db.query(Notification).filter(
+        Notification.user_id == current_user.id,
+        Notification.is_active == True
+    ).order_by(desc(Notification.created_at)).limit(limit).all()
+    
+    return [
+        {
+            "id": n.id,
+            "title": n.title,
+            "message": n.message,
+            "type": n.type.value,
+            "is_read": n.is_read,
+            "link": n.link,
+            "created_at": n.created_at.isoformat(),
+        }
+        for n in notifications
+    ]
