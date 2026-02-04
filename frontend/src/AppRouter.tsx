@@ -16,10 +16,14 @@ import History from './pages/History';
 import Bets from './pages/Bets';
 import AdminRoute from './components/AdminRoute';
 import AdminLoginRoute from './components/AdminLoginRoute';
+import MetaPixel from './components/MetaPixel';
+import NotificationToast from './components/NotificationToast';
 
 export default function AppRouter() {
   return (
     <BrowserRouter>
+      <MetaPixel />
+      <NotificationToast />
       <Routes>
         <Route path="/" element={<App />} />
         <Route path="/conta" element={<Profile />} />

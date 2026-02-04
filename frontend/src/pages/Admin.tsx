@@ -579,6 +579,43 @@ function TransactionsTab({ token }: { token: string }) {
 
   useEffect(() => { fetchAll(); }, []);
 
+  // Calcular estatísticas dos depósitos
+  const depositsPaid = deposits.filter(d => d.status === 'approved');
+  const depositsPending = deposits.filter(d => d.status === 'pending');
+  const totalPaid = depositsPaid.reduce((sum, d) => sum + (d.amount || 0), 0);
+  const totalPending = depositsPending.reduce((sum, d) => sum + (d.amount || 0), 0);
+  const totalDeposits = deposits.reduce((sum, d) => sum + (d.amount || 0), 0);
+
+  const getStatusIcon = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'approved':
+        return '✅';
+      case 'pending':
+        return '⏳';
+      case 'rejected':
+        return '❌';
+      case 'cancelled':
+        return '🚫';
+      default:
+        return '';
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'approved':
+        return 'text-green-400 bg-green-500/20';
+      case 'pending':
+        return 'text-yellow-400 bg-yellow-500/20';
+      case 'rejected':
+        return 'text-red-400 bg-red-500/20';
+      case 'cancelled':
+        return 'text-gray-400 bg-gray-500/20';
+      default:
+        return 'text-gray-400 bg-gray-500/20';
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -605,20 +642,106 @@ function TransactionsTab({ token }: { token: string }) {
       {loading && !deposits.length && !withdrawals.length ? (
         <div>Carregando...</div>
       ) : activeSection === 'deposits' ? (
-        <TabTable
-          title="Depósitos"
-          loading={false}
-          error=""
-          onRefresh={fetchDeposits}
-          columns={['ID', 'Usuário', 'Valor', 'Status', 'Criado em']}
-          rows={deposits.map(d => [
-            d.id,
-            d.username || `#${d.user_id}`,
-            `R$ ${(d.amount ?? 0).toFixed(2).replace('.', ',')}`,
-            d.status || '-',
-            d.created_at ? new Date(d.created_at).toLocaleString('pt-BR') : '-'
-          ])}
-        />
+        <div className="space-y-6">
+          {/* Cards de Resumo */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Total Pago */}
+            <div className="bg-gradient-to-br from-green-900/30 to-green-800/30 rounded-xl p-6 border border-green-500/30">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold text-gray-300">Total Pago</h3>
+                <span className="text-2xl">💰</span>
+              </div>
+              <p className="text-3xl font-bold text-green-400">
+                R$ {totalPaid.toFixed(2).replace('.', ',')}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                {depositsPaid.length} depósito{depositsPaid.length !== 1 ? 's' : ''} aprovado{depositsPaid.length !== 1 ? 's' : ''}
+              </p>
+            </div>
+
+            {/* Pendente */}
+            <div className="bg-gradient-to-br from-yellow-900/30 to-yellow-800/30 rounded-xl p-6 border border-yellow-500/30">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold text-gray-300">Pendente</h3>
+                <span className="text-2xl">⏳</span>
+              </div>
+              <p className="text-3xl font-bold text-yellow-400">
+                R$ {totalPending.toFixed(2).replace('.', ',')}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                {depositsPending.length} depósito{depositsPending.length !== 1 ? 's' : ''} pendente{depositsPending.length !== 1 ? 's' : ''}
+              </p>
+            </div>
+
+            {/* Total Geral */}
+            <div className="bg-gradient-to-br from-blue-900/30 to-blue-800/30 rounded-xl p-6 border border-blue-500/30">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold text-gray-300">Total Geral</h3>
+                <span className="text-2xl">📊</span>
+              </div>
+              <p className="text-3xl font-bold text-blue-400">
+                R$ {totalDeposits.toFixed(2).replace('.', ',')}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                {deposits.length} depósito{deposits.length !== 1 ? 's' : ''} no total
+              </p>
+            </div>
+          </div>
+
+          {/* Tabela de Depósitos */}
+          <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-800">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">ID</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Usuário</th>
+                    <th className="px-4 py-3 text-right text-sm font-semibold text-gray-300">Valor</th>
+                    <th className="px-4 py-3 text-right text-sm font-semibold text-gray-300">Valor Pago</th>
+                    <th className="px-4 py-3 text-center text-sm font-semibold text-gray-300">Status</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Criado em</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deposits.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                        Nenhum depósito encontrado
+                      </td>
+                    </tr>
+                  ) : (
+                    deposits.map(d => (
+                      <tr key={d.id} className="border-t border-gray-800 hover:bg-gray-800/50 transition-colors">
+                        <td className="px-4 py-3 text-gray-300">{d.id}</td>
+                        <td className="px-4 py-3 text-gray-300">{d.username || `#${d.user_id}`}</td>
+                        <td className="px-4 py-3 text-right text-gray-300">
+                          R$ {(d.amount || 0).toFixed(2).replace('.', ',')}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {d.status === 'approved' ? (
+                            <span className="text-green-400 font-semibold">
+                              R$ {(d.amount || 0).toFixed(2).replace('.', ',')}
+                            </span>
+                          ) : (
+                            <span className="text-gray-500">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${getStatusColor(d.status || '')}`}>
+                            {getStatusIcon(d.status || '')} {d.status === 'approved' ? 'Pago' : d.status === 'pending' ? 'Pendente' : d.status === 'rejected' ? 'Rejeitado' : d.status === 'cancelled' ? 'Cancelado' : d.status || '-'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-gray-400 text-sm">
+                          {d.created_at ? new Date(d.created_at).toLocaleString('pt-BR') : '-'}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       ) : (
         <TabTable
           title="Saques"

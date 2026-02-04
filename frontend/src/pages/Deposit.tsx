@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, Copy, Check, Loader2, QrCode, AlertCircle } from 'lucide-react';
+import { trackMetaEvent } from '../components/MetaPixel';
 import { API_URL } from '../utils/api';
 
 export default function Deposit() {
@@ -16,6 +17,7 @@ export default function Deposit() {
   const [error, setError] = useState('');
   const [deposit, setDeposit] = useState<any>(null);
   const [copied, setCopied] = useState(false);
+  const [lastDepositStatus, setLastDepositStatus] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`${API_URL}/api/public/minimums`)
@@ -108,12 +110,66 @@ export default function Deposit() {
 
       const data = await response.json();
       setDeposit(data);
+      setLastDepositStatus(data.status);
+      
+      // Disparar evento InitiateCheckout quando código PIX é gerado
+      trackMetaEvent('InitiateCheckout', {
+        content_name: 'Depósito PIX',
+        value: value,
+        currency: 'BRL'
+      });
     } catch (err: any) {
       setError(err.message || 'Erro ao processar depósito. Tente novamente.');
     } finally {
       setLoading(false);
     }
   };
+
+  // Verificar se depósito pendente foi confirmado
+  useEffect(() => {
+    if (!deposit || !token || deposit.status === 'approved') return;
+
+    const checkDepositStatus = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/public/payments/my-transactions`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const transactions = data.transactions || [];
+          const latestDeposit = transactions.find((t: any) => 
+            t.type === 'deposit' && t.id === deposit.id
+          );
+          
+          // Se o status mudou de pending para approved, disparar Purchase
+          if (latestDeposit && latestDeposit.status === 'approved' && lastDepositStatus === 'pending') {
+            setLastDepositStatus('approved');
+            
+            // Buscar todos os depósitos aprovados para verificar se é FTD
+            const approvedDeposits = transactions.filter((t: any) => 
+              t.type === 'deposit' && t.status === 'approved'
+            );
+            const isFTD = approvedDeposits.length === 1;
+            
+            trackMetaEvent('Purchase', {
+              value: deposit.amount,
+              currency: 'BRL',
+              content_name: isFTD ? 'First Time Deposit (FTD)' : 'Deposit',
+              content_category: isFTD ? 'FTD' : 'Deposit'
+            });
+            
+            console.log(`[Meta Pixel] Purchase disparado: R$ ${deposit.amount.toFixed(2)}${isFTD ? ' (FTD)' : ''}`);
+          }
+        }
+      } catch (error) {
+        console.error('[Deposit] Erro ao verificar status do depósito:', error);
+      }
+    };
+
+    // Verificar a cada 5 segundos se o depósito foi confirmado
+    const interval = setInterval(checkDepositStatus, 5000);
+    return () => clearInterval(interval);
+  }, [deposit, token, lastDepositStatus]);
 
   const copyPixCode = () => {
     if (deposit?.metadata_json) {

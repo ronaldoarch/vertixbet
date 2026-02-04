@@ -2105,3 +2105,31 @@ async def get_public_notifications(
         }
         for n in notifications
     ]
+
+
+@public_router.get("/tracking-config")
+async def get_public_tracking_config(
+    platform: str = Query("meta", description="Plataforma de tracking (meta, google, tiktok)"),
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna configuração pública de tracking (apenas pixel_id e is_active)
+    Usado pelo frontend para carregar pixels de tracking
+    """
+    config = db.query(TrackingConfig).filter(
+        TrackingConfig.platform == platform,
+        TrackingConfig.is_active == True
+    ).first()
+    
+    if not config:
+        return {
+            "platform": platform,
+            "pixel_id": None,
+            "is_active": False
+        }
+    
+    return {
+        "platform": config.platform,
+        "pixel_id": config.pixel_id,
+        "is_active": config.is_active
+    }

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-
+import { trackMetaEvent } from './MetaPixel';
 import { API_URL } from '../utils/api';
 
 interface RegisterModalProps {
@@ -200,6 +200,14 @@ export default function RegisterModal({ isOpen, onClose, onSwitchToLogin }: Regi
                   phone: phone,
                   affiliate_code: ref,
                 });
+                
+                // Disparar eventos do Meta Pixel após registro bem-sucedido
+                trackMetaEvent('CompleteRegistration');
+                trackMetaEvent('Lead', {
+                  content_name: 'User Registration',
+                  content_category: 'Sign Up'
+                });
+                
                 onClose();
               } catch (err: any) {
                 setError(err.message || 'Erro ao criar conta');
