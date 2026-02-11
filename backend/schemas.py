@@ -34,6 +34,10 @@ class UserUpdate(BaseModel):
     role: Optional[UserRole] = None
 
 
+class ChangePasswordRequest(BaseModel):
+    new_password: str
+
+
 class UserResponse(UserBase):
     id: int
     role: UserRole

@@ -17,7 +17,7 @@ from models import (
     Affiliate, Theme, ProviderOrder, TrackingConfig, SiteSettings, Coupon, CouponType, Promotion
 )
 from schemas import (
-    UserResponse, UserCreate, UserUpdate,
+    UserResponse, UserCreate, UserUpdate, ChangePasswordRequest,
     DepositResponse, DepositCreate, DepositUpdate,
     WithdrawalResponse, WithdrawalCreate, WithdrawalUpdate,
     FTDResponse, FTDCreate, FTDUpdate,
@@ -112,6 +112,38 @@ async def update_user(
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.put("/users/{user_id}/change-password", status_code=status.HTTP_200_OK)
+async def change_user_password(
+    user_id: int,
+    password_data: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """
+    Altera a senha de um usuário (incluindo admin)
+    Requer autenticação admin
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    
+    if not password_data.new_password or len(password_data.new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A senha deve ter pelo menos 6 caracteres"
+        )
+    
+    # Atualizar senha com hash
+    user.password_hash = get_password_hash(password_data.new_password)
+    db.commit()
+    
+    return {
+        "message": "Senha alterada com sucesso",
+        "user_id": user.id,
+        "username": user.username
+    }
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
