@@ -26,6 +26,11 @@ class UserUpdate(BaseModel):
     role: Optional[UserRole] = None
 
 
+class AddBalanceRequest(BaseModel):
+    amount: float
+    reason: Optional[str] = None
+
+
 class UserResponse(UserBase):
     id: int
     role: UserRole

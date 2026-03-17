@@ -6,7 +6,7 @@ import {
   ArrowDownCircle, Activity, RefreshCw,
   Image as ImageIcon, Home, BarChart3,
   ChevronUp, ChevronDown, Percent, FileText, 
-  Gift, ShoppingBag, Tag
+  Gift, ShoppingBag, Tag, Plus
 } from 'lucide-react';
 import type { ThemePalette } from '../utils/themeManager';
 import { applyThemeToDocument, getThemeList, saveThemeList, setActiveTheme } from '../utils/themeManager';
@@ -448,6 +448,10 @@ function UsersTab({ token }: { token: string }) {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [addBalanceUser, setAddBalanceUser] = useState<{ id: number; username: string } | null>(null);
+  const [addAmount, setAddAmount] = useState('');
+  const [addBalanceLoading, setAddBalanceLoading] = useState(false);
+  const [addBalanceError, setAddBalanceError] = useState('');
 
   const fetchUsers = async () => {
     setLoading(true); setError('');
@@ -462,6 +466,37 @@ function UsersTab({ token }: { token: string }) {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAddBalance = async () => {
+    if (!addBalanceUser) return;
+    const amount = parseFloat(addAmount?.replace(',', '.') || '0');
+    if (isNaN(amount) || amount <= 0) {
+      setAddBalanceError('Informe um valor válido maior que zero');
+      return;
+    }
+    setAddBalanceLoading(true); setAddBalanceError('');
+    try {
+      const res = await fetch(`${API_URL}/api/admin/users/${addBalanceUser.id}/add-balance`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ amount })
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || 'Falha ao adicionar saldo');
+      }
+      setAddBalanceUser(null);
+      setAddAmount('');
+      fetchUsers();
+    } catch (err: any) {
+      setAddBalanceError(err.message);
+    } finally {
+      setAddBalanceLoading(false);
     }
   };
 
@@ -486,6 +521,7 @@ function UsersTab({ token }: { token: string }) {
                 <th className="px-3 py-2 text-left">Email</th>
                 <th className="px-3 py-2 text-left">Saldo</th>
                 <th className="px-3 py-2 text-left">Status</th>
+                <th className="px-3 py-2 text-left">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -496,10 +532,51 @@ function UsersTab({ token }: { token: string }) {
                   <td className="px-3 py-2">{u.email}</td>
                   <td className="px-3 py-2">R$ {u.balance?.toFixed(2)}</td>
                   <td className="px-3 py-2">{u.is_active ? 'Ativo' : 'Inativo'}</td>
+                  <td className="px-3 py-2">
+                    <button
+                      onClick={() => setAddBalanceUser({ id: u.id, username: u.username })}
+                      className="flex items-center gap-1 px-2 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-xs"
+                    >
+                      <Plus size={14} /> Adicionar Saldo
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Modal Adicionar Saldo */}
+      {addBalanceUser && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => !addBalanceLoading && setAddBalanceUser(null)}>
+          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-sm border border-gray-700" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-2">Adicionar Saldo</h3>
+            <p className="text-gray-400 text-sm mb-4">Usuário: <strong>{addBalanceUser.username}</strong></p>
+            <input
+              type="text"
+              placeholder="Valor (ex: 100 ou 50,00)"
+              value={addAmount}
+              onChange={e => { setAddAmount(e.target.value); setAddBalanceError(''); }}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded mb-2 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+            {addBalanceError && <p className="text-red-400 text-sm mb-2">{addBalanceError}</p>}
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => !addBalanceLoading && setAddBalanceUser(null)}
+                className="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleAddBalance}
+                disabled={addBalanceLoading}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded disabled:opacity-50"
+              >
+                {addBalanceLoading ? 'Salvando...' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

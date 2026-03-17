@@ -14,7 +14,7 @@ from models import (
     TransactionStatus, UserRole, Bet, BetStatus, Notification, NotificationType
 )
 from schemas import (
-    UserResponse, UserCreate, UserUpdate,
+    UserResponse, UserCreate, UserUpdate, AddBalanceRequest,
     DepositResponse, DepositCreate, DepositUpdate,
     WithdrawalResponse, WithdrawalCreate, WithdrawalUpdate,
     FTDResponse, FTDCreate, FTDUpdate,
@@ -98,6 +98,25 @@ async def update_user(
     for field, value in update_data.items():
         setattr(user, field, value)
     
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.post("/users/{user_id}/add-balance", response_model=UserResponse)
+async def add_user_balance(
+    user_id: int,
+    data: AddBalanceRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """Adicionar saldo manualmente a um usuário (apenas admin)."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if data.amount <= 0:
+        raise HTTPException(status_code=400, detail="O valor deve ser maior que zero")
+    user.balance += data.amount
     db.commit()
     db.refresh(user)
     return user
