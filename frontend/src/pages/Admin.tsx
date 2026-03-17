@@ -7,7 +7,7 @@ import {
   Image as ImageIcon, Home,
   ChevronUp, ChevronDown, Percent, FileText, 
   Gift, Tag, Gamepad2, UserCog, Palette, BarChart, GripVertical, FileDown,
-  ShoppingBag, Plus
+  Plus
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { API_URL } from '../utils/api';
