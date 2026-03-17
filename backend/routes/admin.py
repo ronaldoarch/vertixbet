@@ -17,7 +17,7 @@ from models import (
     Affiliate, Theme, ProviderOrder, TrackingConfig, SiteSettings, Coupon, CouponType, Promotion
 )
 from schemas import (
-    UserResponse, UserCreate, UserUpdate, ChangePasswordRequest,
+    UserResponse, UserCreate, UserUpdate, ChangePasswordRequest, AddBalanceRequest,
     DepositResponse, DepositCreate, DepositUpdate,
     WithdrawalResponse, WithdrawalCreate, WithdrawalUpdate,
     FTDResponse, FTDCreate, FTDUpdate,
@@ -144,6 +144,25 @@ async def change_user_password(
         "user_id": user.id,
         "username": user.username
     }
+
+
+@router.post("/users/{user_id}/add-balance", response_model=UserResponse)
+async def add_user_balance(
+    user_id: int,
+    data: AddBalanceRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    """Adicionar saldo manualmente a um usuário (apenas admin)."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if data.amount <= 0:
+        raise HTTPException(status_code=400, detail="O valor deve ser maior que zero")
+    user.balance += data.amount
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

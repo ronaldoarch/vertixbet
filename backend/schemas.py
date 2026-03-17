@@ -38,6 +38,11 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
+class AddBalanceRequest(BaseModel):
+    amount: float
+    reason: Optional[str] = None
+
+
 class UserResponse(UserBase):
     id: int
     role: UserRole
